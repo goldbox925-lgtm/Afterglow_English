@@ -27,16 +27,16 @@ AG.CONFIG = {
      used for local animation, camera easing and sound, never to advance
      the story. `prompt` is the short context-sensitive instruction.     */
   states: [
-    { id: 'NUMBNESS',        num: '01', title: 'ОЦЕПЕНЕНИЕ',        subtitle: 'Город, который замер',
-      prompt: 'Осмотрись с помощью мыши. Нажми на пульсирующее окно.' },
-    { id: 'FRACTURE',        num: '02', title: 'НАДЛОМ',        subtitle: 'Ночь, когда всё разрушилось',
-      prompt: 'Нажми на четыре светящихся окна, чтобы вернуть им свет.' },
-    { id: 'AWAKENING',       num: '03', title: 'ПРОБУЖДЕНИЕ',       subtitle: 'Первый свет',
-      prompt: 'Нажми на пять тёмных кругов со светящимся контуром, чтобы пробудить здания.' },
-    { id: 'RECLAIMING_SELF', num: '04', title: 'ВОЗВРАЩЕНИЕ К СЕБЕ', subtitle: 'Город, который слышит',
-      prompt: 'Соедини две золотые точки на зданиях: протяни линию мышью или нажми на них по очереди.' },
-    { id: 'AFTERGLOW',       num: '05', title: 'AFTERGLOW',       subtitle: 'Стать светом',
-      prompt: 'Мышь или ← → — поворот · ↓ — снижение · удерживай ↑ для вознесения к свету.' }
+    { id: 'NUMBNESS',        num: '01', title: 'NUMBNESS',        subtitle: 'The city that stood still',
+      prompt: 'Look around with the mouse. Click the pulsing window.' },
+    { id: 'FRACTURE',        num: '02', title: 'FRACTURE',        subtitle: 'The night everything broke',
+      prompt: 'Click four glowing windows to bring back their light.' },
+    { id: 'AWAKENING',       num: '03', title: 'AWAKENING',       subtitle: 'First light',
+      prompt: 'Click five dark buildings marked with a glowing ring to wake them.' },
+    { id: 'RECLAIMING_SELF', num: '04', title: 'RECLAIMING YOURSELF', subtitle: 'The city that listens',
+      prompt: 'Connect five pairs of golden points on the buildings: drag a line between them or click one, then the other.' },
+    { id: 'AFTERGLOW',       num: '05', title: 'AFTERGLOW',       subtitle: 'Become the light',
+      prompt: 'Mouse or ← → to turn · ↓ to descend · hold ↑ to rise toward the light' }
   ],
 
   interaction: {

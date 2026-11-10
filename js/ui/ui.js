@@ -82,23 +82,23 @@ AG.UI = (function () {
     renderAssets();
     U.on('characterAsset', renderAssets);
 
-    U.on('playstate', (pl) => { $('btnPlay').innerHTML = pl ? ICON.pause : ICON.play; $('btnPlay').title = pl ? 'Пауза (Пробел)' : 'Продолжить (Пробел)'; document.body.classList.toggle('paused', !pl); });
+    U.on('playstate', (pl) => { $('btnPlay').innerHTML = pl ? ICON.pause : ICON.play; $('btnPlay').title = pl ? 'Pause (Space)' : 'Resume (Space)'; document.body.classList.toggle('paused', !pl); });
     U.on('muted', (m) => { $('btnSound').innerHTML = m ? ICON.soundOff : ICON.soundOn; $('btnSound').classList.toggle('off', m); });
     U.on('mic', (M) => {
       const b = $('btnVoice');
       b.classList.toggle('on', M.state === 'on');
       b.classList.toggle('warn', ['denied', 'unavailable', 'insecure'].includes(M.state));
       $('voicePanel').classList.toggle('show', M.state === 'on');
-      $('micStatus').textContent = M.state === 'off' ? 'микрофон выкл.' : M.state === 'on' ? 'микрофон вкл.' : M.state === 'requesting' ? 'запрос доступа…' : 'микрофон недоступен';
+      $('micStatus').textContent = M.state === 'off' ? 'mic off' : M.state === 'on' ? 'mic on' : M.state === 'requesting' ? 'requesting access…' : 'mic unavailable';
       $('micStatus').className = 'pill ' + M.state;
       if (M.message && M.state !== 'on') toast(M.message);
-      if (M.state === 'on') toast('Микрофон включён. Город реагирует на звук; запись не ведётся.');
+      if (M.state === 'on') toast('Microphone on. The city responds to sound; nothing is recorded.');
     });
     U.on('finale', () => { setTimeout(() => { if (AG.Flight.finale) { document.body.classList.add('ended'); $('endCard').classList.add('show'); } }, 13000); });
     U.on('reset', () => { $('endCard').classList.remove('show'); document.body.classList.remove('ended'); });
     U.on('replay', () => { $('endCard').classList.remove('show'); document.body.classList.remove('ended'); });
     U.on('quality', (q) => { $('tierNow').textContent = q; });
-    U.on('audioMode', (m) => { $('audioMode').textContent = m === 'mp3' ? 'музыка: MP3' : 'музыка: генеративная'; });
+    U.on('audioMode', (m) => { $('audioMode').textContent = m === 'mp3' ? 'music: MP3' : 'music: generative'; });
 
     const wake = () => { idle = 0; };
     window.addEventListener('pointermove', wake); window.addEventListener('keydown', wake); window.addEventListener('pointerdown', wake);
@@ -133,18 +133,18 @@ AG.UI = (function () {
   /* the prompt for this moment (context sensitive, never a score) */
   function promptFor(st) {
     const F = AG.FSM, IA = AG.Interactions;
-    if (F.cinematic) return { title: 'СМОТРИ НА СЦЕНУ', text: 'Скоро можно будет взаимодействовать.' };
+    if (F.cinematic) return { title: 'WATCH THE SCENE', text: "You'll be able to interact soon." };
     const def = C.states.find((s) => s.id === st);
     if (st === 'AFTERGLOW') {
       if (AG.Flight.finale) return null;
       if (F.mode === 'ASCENSION') return null;
-      if (F.stateTime > 50 && F.modeTime > 30) return { title: 'Вознесение к свету', text: 'Удерживай ↑, чтобы быстро взлетать к свету.' };
+      if (F.stateTime > 50 && F.modeTime > 30) return { title: 'Rise to the light', text: 'Hold ↑ to soar quickly toward the light.' };
       return { title: def.title, text: def.prompt };
     }
-    if (st === 'NUMBNESS') return { title: 'НАЙДИ СВЕТ', text: def.prompt };
-    if (st === 'FRACTURE') return { title: 'ВОССТАНОВИ ОГНИ', text: def.prompt };
-    if (st === 'AWAKENING') return { title: 'ПРОБУДИ ГОРОД', text: def.prompt };
-    if (st === 'RECLAIMING_SELF') return { title: 'СОЕДИНИ ЗДАНИЯ', text: def.prompt };
+    if (st === 'NUMBNESS') return { title: 'FIND THE LIGHT', text: def.prompt };
+    if (st === 'FRACTURE') return { title: 'RESTORE THE LIGHTS', text: def.prompt };
+    if (st === 'AWAKENING') return { title: 'WAKE THE CITY', text: def.prompt };
+    if (st === 'RECLAIMING_SELF') return { title: 'CONNECT THE BUILDINGS', text: def.prompt };
     return { title: def.title, text: def.prompt };
   }
 
@@ -159,7 +159,7 @@ AG.UI = (function () {
     let prog = st === 'AFTERGLOW' ? 0.8 + 0.2 * AG.Flight.asc : Math.min(0.8, idx * 0.1 + 0.5 * U.clamp(AG.Interactions.progress / NC.toAfterglow, 0, 1));
     $('progress').style.width = (prog * 100).toFixed(1) + '%';
     const def = C.states[idx];
-    $('timeText').textContent = st === 'AFTERGLOW' && AG.Flight.arc ? AG.Flight.phase : AG.Flight.finale ? 'СВЕТ' : def.title;
+    $('timeText').textContent = st === 'AFTERGLOW' && AG.Flight.arc ? AG.Flight.phase : AG.Flight.finale ? 'LIGHT' : def.title;
     if (S.hint !== lastHint) { lastHint = S.hint; $('hint').textContent = S.hint; $('hint').classList.toggle('show', !!S.hint); }
     $('meterFill').style.width = (AG.Mic.level * 100).toFixed(0) + '%';
     document.body.classList.toggle('flying', st === 'AFTERGLOW');

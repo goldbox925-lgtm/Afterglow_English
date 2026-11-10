@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>AFTERGLOW — Город чувств</title>
-  <meta name="description" content="Интерактивная история о разбитом сердце, восстановлении города и возрождении.">
+  <title>AFTERGLOW — City of Feelings</title>
+  <meta name="description" content="An interactive story about a broken heart, a city restored, and rebirth.">
   <meta name="theme-color" content="#05060c">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2305060c'/%3E%3Crect x='7' y='9' width='5' height='17' fill='%23ff2a9e'/%3E%3Crect x='14' y='4' width='5' height='22' fill='%2322e8ff'/%3E%3Crect x='21' y='12' width='4' height='14' fill='%238b45ff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css?v=20261023readable">
@@ -15,27 +15,27 @@
   <!-- ===== Opening screen ===== -->
   <section id="intro">
     <div class="intro-inner">
-      <p class="eyebrow">Интерактивная музыкальная история</p>
+      <p class="eyebrow">An interactive musical story</p>
       <h1 class="title" data-text="AFTERGLOW">AFTERGLOW</h1>
-      <p class="subtitle">Город, созданный из чувств</p>
-      <p class="tagline">Когда город чувствует то же, что и ты.</p>
-      <button id="btnEnter" class="enter" disabled>Начать историю</button>
-      <p id="loadMsg" class="load">Загрузка…</p>
-      <p class="note">Пять эмоциональных состояний · <em>Оцепенение</em> → <em>Надлом</em> → <em>Пробуждение</em> → <em>Возвращение к себе</em> → <em>Возрождение</em><br>
-        История продолжается только благодаря тебе: найди свет, восстанови огни, оживи город, лети и вознесись.<br>Мышь и стрелки · интерактивная 3D-сцена · микрофон необязателен.</p>
+      <p class="subtitle">A city made of feelings</p>
+      <p class="tagline">When the city feels what you feel.</p>
+      <button id="btnEnter" class="enter" disabled>Begin the story</button>
+      <p id="loadMsg" class="load">Loading…</p>
+      <p class="note">Five emotional states · <em>Numbness</em> → <em>Fracture</em> → <em>Awakening</em> → <em>Reclaiming Yourself</em> → <em>Rebirth</em><br>
+        The story moves forward only through you: find the light, restore the lights, bring the city back, fly, and rise.<br>Mouse and arrow keys · interactive 3D scene · microphone optional.</p>
     </div>
   </section>
 
   <!-- ===== HUD ===== -->
   <header id="hud">
-    <div id="brand"><span class="wordmark">AFTERGLOW</span><span id="chapterLabel">01 · ОЦЕПЕНЕНИЕ</span></div>
-    <div id="hudRight"><span id="micStatus" class="pill off">микрофон выкл.</span></div>
+    <div id="brand"><span class="wordmark">AFTERGLOW</span><span id="chapterLabel">01 · NUMBNESS</span></div>
+    <div id="hudRight"><span id="micStatus" class="pill off">mic off</span></div>
   </header>
 
   <div id="chapterCard">
     <div id="cardNum">01</div>
-    <div id="cardTitle">ОЦЕПЕНЕНИЕ</div>
-    <div id="cardSub">Город, который замер</div>
+    <div id="cardTitle">NUMBNESS</div>
+    <div id="cardSub">The city that stood still</div>
   </div>
 
   <div id="hint"></div>
@@ -44,7 +44,7 @@
 
   <!-- ===== Interactive stages ===== -->
   <section id="stagePanel" aria-live="polite">
-    <div id="stageTitle">Найди пульс света</div>
+    <div id="stageTitle">Find the pulse of light</div>
     <div id="stageText"></div>
     <div id="stageCount"></div>
   </section>
@@ -60,14 +60,14 @@
       <button id="btnReplay" class="ic" title="Replay (R)" aria-label="Replay"></button>
       <div id="timeline">
         <div id="track" title="How much of the city has come back"><div id="progress"></div></div>
-        <span id="timeText">ОЦЕПЕНЕНИЕ</span>
+        <span id="timeText">NUMBNESS</span>
       </div>
       <div id="chapters" title="Emotional states — presentation jump (earlier states complete with default choices)"></div>
       <button id="btnSound" class="ic" title="Sound on/off (M)" aria-label="Sound"></button>
       <input id="vol" type="range" min="0" max="1" step="0.05" value="0.85" title="Volume" aria-label="Volume">
       <button id="btnVoice" class="ic" title="Voice Mode — microphone (V)" aria-label="Voice mode"></button>
       <div id="voicePanel">
-        <label for="sens">чувствительность</label>
+        <label for="sens">sensitivity</label>
         <input id="sens" type="range" min="0.3" max="3" step="0.1" value="1">
         <span id="sensVal">1.0×</span>
         <div id="meter"><div id="meterFill"></div></div>
@@ -75,66 +75,66 @@
       <select id="camMode" title="Camera mode (C)" aria-label="Camera mode"></select>
       <button id="btnRegen" class="ic" title="Generate a new city (N)" aria-label="New city"></button>
       <button id="btnFull" class="ic" title="Fullscreen (F)" aria-label="Fullscreen"></button>
-      <button id="btnHelp" class="ic" title="Управление и настройки (?)" aria-label="Help"></button>
+      <button id="btnHelp" class="ic" title="Controls &amp; settings (?)" aria-label="Help"></button>
     </div>
   </footer>
 
   <!-- ===== Help / settings ===== -->
   <section id="help" class="panel">
     <button id="helpClose" class="close" aria-label="Close">×</button>
-    <h2>Управление</h2>
+    <h2>Controls</h2>
     <div class="cols">
       <dl>
-        <dt>Мышь (перетаскивание)</dt><dd>осмотреться (01–04)</dd>
-        <dt>Колёсико</dt><dd>приблизить или отдалить вид</dd>
-        <dt>Клик</dt><dd>зажечь свет или активировать здание</dd>
-        <dt>Перетаскивание между точками</dt><dd>соединить здания на стадии 04</dd>
-        <dt>← → ↑ ↓</dt><dd>осмотреться (01–04)</dd>
-        <dt>Пробел</dt><dd>пауза / продолжить</dd>
-        <dt>R</dt><dd>начать сначала</dd>
-        <dt>1 – 5</dt><dd>перейти к стадии (для презентации)</dd>
-        <dt>C</dt><dd>сменить камеру</dd>
-        <dt>M · V</dt><dd>звук · микрофон</dd>
-        <dt>N · F · H · Q</dt><dd>новый город · полный экран · скрыть интерфейс · качество</dd>
+        <dt>Mouse (drag)</dt><dd>look around (01–04)</dd>
+        <dt>Wheel</dt><dd>zoom in or out</dd>
+        <dt>Click</dt><dd>light a window or wake a building</dd>
+        <dt>Drag between points</dt><dd>connect buildings in stage 04</dd>
+        <dt>← → ↑ ↓</dt><dd>look around (01–04)</dd>
+        <dt>Space</dt><dd>pause / resume</dd>
+        <dt>R</dt><dd>restart</dd>
+        <dt>1 – 5</dt><dd>jump to a stage (for presentations)</dd>
+        <dt>C</dt><dd>switch camera</dd>
+        <dt>M · V</dt><dd>sound · microphone</dd>
+        <dt>N · F · H · Q</dt><dd>new city · fullscreen · hide interface · quality</dd>
       </dl>
       <dl>
-        <dt>01 Оцепенение</dt><dd>вдалеке едва мерцает одно окно. Найди его и <b>нажми</b>. Если понадобится, появятся подсказки.</dd>
-        <dt>02 Надлом</dt><dd><b>Нажми на четыре подсвеченных окна.</b> Их свет останется навсегда.</dd>
-        <dt>03 Пробуждение</dt><dd><b>Нажми на пять тёмных зданий с подсвеченным контуром.</b> Свет перейдёт к ним.</dd>
-        <dt>04 Возвращение к себе</dt><dd><b>Соедини пять пар золотых точек на зданиях.</b> Перетащи мышь между ними или нажми по очереди.</dd>
-        <dt>05 Возрождение</dt><dd>управляй полётом: <b>мышь или ← →</b> — поворот, <b>↓</b> — снижение, <b>удерживай ↑</b> для быстрого вознесения к свету.</dd>
-        <dt>Микрофон</dt><dd>громкие звуки заставляют разрушенный город дрожать, ровный голос успокаивает дождь. Необязательно.</dd>
+        <dt>01 Numbness</dt><dd>one window flickers faintly in the distance. Find it and <b>click</b> it. Hints appear if you need them.</dd>
+        <dt>02 Fracture</dt><dd><b>Click four glowing windows.</b> Their light will stay for good.</dd>
+        <dt>03 Awakening</dt><dd><b>Click five dark buildings marked with a glowing ring.</b> The light will pass to them.</dd>
+        <dt>04 Reclaiming Yourself</dt><dd><b>Connect five pairs of golden points on the buildings.</b> Drag between them or click one, then the other.</dd>
+        <dt>05 Rebirth</dt><dd>steer the flight: <b>mouse or ← →</b> to turn, <b>↓</b> to descend, <b>hold ↑</b> to rise quickly toward the light.</dd>
+        <dt>Microphone</dt><dd>loud sounds make the broken city tremble; a steady voice calms the rain. Optional.</dd>
       </dl>
     </div>
     <div class="settings">
-      <label>Качество
+      <label>Quality
         <select id="quality">
-          <option value="auto">Авто (адаптивно)</option>
+          <option value="auto">Auto (adaptive)</option>
           <option value="low">Low</option>
           <option value="balanced">Balanced</option>
           <option value="high">High</option>
         </select>
       </label>
-      <span class="meta">уровень качества: <b id="tierNow">balanced</b> · seed: <b id="seedVal">—</b> · <span id="audioMode">музыка: —</span></span>
+      <span class="meta">quality tier: <b id="tierNow">balanced</b> · seed: <b id="seedVal">—</b> · <span id="audioMode">music: —</span></span>
     </div>
-    <h2 class="sub">Изображения героини</h2>
+    <h2 class="sub">Character images</h2>
     <div id="assetReport" class="assets"></div>
-    <p class="fine">Сигнал микрофона анализируется только на устройстве и не записывается и не отправляется. AFTERGLOW не распознаёт эмоции.</p>
+    <p class="fine">The microphone signal is analysed only on your device. It is never recorded or sent anywhere. AFTERGLOW does not detect emotions.</p>
   </section>
 
   <!-- ===== End card ===== -->
   <section id="titleReveal" aria-hidden="true">
     <div class="tr-title" data-text="AFTERGLOW">AFTERGLOW</div>
-    <div class="tr-sub">Город, созданный из чувств</div>
+    <div class="tr-sub">A city made of feelings</div>
   </section>
 
   <section id="endCard">
     <p class="eyebrow">AFTERGLOW</p>
-    <p class="quote">Её сердце было разбито.<br>Но она смогла возродиться.</p>
-    <button id="endReplay" class="enter small">Начать сначала</button>
+    <p class="quote">Her heart was broken.<br>But she rose again.</p>
+    <button id="endReplay" class="enter small">Play again</button>
   </section>
 
-  <noscript><p class="nojs">Для AFTERGLOW нужны JavaScript и WebGL 2.</p></noscript>
+  <noscript><p class="nojs">AFTERGLOW needs JavaScript and WebGL 2.</p></noscript>
 
   <!-- p5.js 1.11.11 (bundled locally for reliable GitHub Pages hosting; LGPL-2.1) -->
   <script src="lib/p5.min.js"></script>
