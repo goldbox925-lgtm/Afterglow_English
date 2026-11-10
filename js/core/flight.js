@@ -1,6 +1,17 @@
 /* =====================================================================
    Flight — state 05, under the viewer's control.
    ---------------------------------------------------------------------
+   CONTROLS (Phase 5; keyboard and the touch pad set the same F.keys)
+                ← →        steer (mouse x also steers, with a dead zone)
+                ↑ tap      a small upward lift (≈ 13 m)
+                ↑ ↑ double-tap (within 0.4 s): a noticeable rise (≈ 45 m in all),
+                           eased in and out, never a snap
+                ↑ hold     forward speed eases from cruise (21) to boost (30 m/s)
+                ↓          descend (cancels any rise still pending)
+                no input   a level glide: no sinking, no drifting
+                holding ← or → tightens the turn gradually (U-turn in ≈ 2.3 s)
+                Holding ↑ never ends the story; the fifth fragment does.
+                (The ascension ARC below is no longer started by ↑.)
    FREE_FLIGHT  horizontal flight through the restored city.
                 mouse x (with a dead zone) and ← → set the turn rate,
                 ↓ descends. Speed eases toward a cruise speed.
@@ -50,7 +61,8 @@ AG.Flight = (function () {
     F.pos = [0.6, H0 + 4.2, -24]; F.yaw = 0; F.yawRate = 0; F.speed = 0; F.vy = 0; F.bank = 0; F.upright = 0; F.asc = 0; F.finale = false;
     F.ascT = 0; F.released = 99; F.arc = false; F.phase = 'FLIGHT'; F.holding = false;
     trail = []; for (let i = 0; i < 24; i++) trail.push(F.pos.slice());
-    upHeld = 0; sinceUp = 99; cloudHit = false;
+    upHeld = 0; sinceUp = 99; cloudHit = false; pendingLift = 0; liftLeft = 0; lastTapAt = -1e9; steerHeld = 0; upDownAt = 0;
+    F.boosting = false; F.lifts = 0; F.doubleTaps = 0;
     if (AG.Fragments) AG.Fragments.reset();          // every flight starts with all five fragments in place
   }
 
@@ -61,6 +73,28 @@ AG.Flight = (function () {
     F.finale = true; F.phase = 'LIGHT';
     AG.U.emit('ascPhase', { phase: 'LIGHT', prev });
     AG.U.emit('finale');
+  }
+
+  /* key / touch input → F.keys. Taps of ↑ are detected HERE, at the press/release events
+     (wall time), so even a tap shorter than one frame is never lost; update() applies them. */
+  let upDownAt = 0, pendingLift = 0, lastTapAt = -1e9, liftLeft = 0, steerHeld = 0;
+  function press(k, on) {
+    const was = !!F.keys[k];
+    F.keys[k] = !!on;
+    if (k !== 'up') return;
+    const now = performance.now();
+    if (on && !was) upDownAt = now;
+    else if (!on && was) {
+      const active = AG.FSM.playing && AG.FSM.state === 'AFTERGLOW' && !AG.FSM.cinematic && !F.finale;
+      const FC = AG.CONFIG.flight;
+      if (active && now - upDownAt < FC.tapMax * 1000) {
+        // a second tap soon after the first = a double-tap: the bigger, deliberate rise
+        const dbl = now - lastTapAt < FC.doubleTapWindow * 1000;
+        pendingLift += dbl ? FC.doubleLift : FC.tapLift;
+        lastTapAt = dbl ? -1e9 : now;
+        if (dbl) F.doubleTaps = (F.doubleTaps || 0) + 1;
+      }
+    }
   }
 
   const heading = (yaw) => [Math.sin(yaw), 0, -Math.cos(yaw)];
@@ -77,21 +111,22 @@ AG.Flight = (function () {
   function update(dt, input, active) {
     if (!F.ready || !active) return;
     const FC = AG.CONFIG.flight, k = F.keys;
-    const held = !F.finale && !!k.up;
-    F.holding = held;
-    // ---- the ascension arc: held time drives the emotional phase ----
-    if (held) { if (!F.arc) { F.arc = true; } F.ascT += dt; F.released = 0; }
-    else F.released += dt;
-    if (F.arc && !held && F.released > 4) {          // a long pause: back to free flight
-      F.arc = false;
-      F.ascT = F.ascT >= 3.8 ? 6.2 : 0;               // liberation is kept; suffering is not replayed
-    }
-    const ph = F.arc ? phaseOf(F.ascT) : 'FLIGHT';
-    if (ph !== F.phase) { const prev = F.phase; F.phase = ph; AG.U.emit('ascPhase', { phase: ph, prev }); }
+    // ---- ↑ (keyboard or touch): a SHORT press (released within FC.tapMax s) gives a small
+    //      upward lift; HOLDING it smoothly boosts forward speed. It never starts the ending:
+    //      only the fifth fragment does (below). ----
+    const upNow = !F.finale && !!k.up;
+    if (pendingLift > 0) { liftLeft += pendingLift; pendingLift = 0; F.lifts = (F.lifts || 0) + 1; }
+    const boosting = upNow && performance.now() - upDownAt >= FC.tapMax * 1000;
+    F.boosting = boosting; F.holding = boosting;
     // ---- steering: mouse x + ← → (only in free flight) ----
     let mx = input.mx || 0;
     mx = Math.abs(mx) < FC.deadZone ? 0 : (mx - Math.sign(mx) * FC.deadZone) / (1 - FC.deadZone);
-    let turn = F.arc ? 0 : mx * FC.mouseTurn + ((k.right ? 1 : 0) - (k.left ? 1 : 0)) * FC.turnRate;
+    // a held ← or → tightens gradually (up to turnRate × (1 + turnTighten)), so a sustained
+    // turn becomes a controlled U-turn; short presses steer exactly as before
+    const steer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+    steerHeld = steer ? steerHeld + dt : 0;
+    const tighten = 1 + FC.turnTighten * U.smooth(0.4, 1.4, steerHeld);
+    let turn = mx * FC.mouseTurn + steer * FC.turnRate * tighten;
     // ---- collision avoidance: look ahead, steer toward the side with more room ----
     const h = heading(F.yaw);
     const ahead = V.add(F.pos, V.scale(h, FC.probe + F.speed * 0.6));
@@ -103,13 +138,16 @@ AG.Flight = (function () {
       F.avoiding = true;
     } else F.avoiding = false;
     F.yawRate = U.damp(F.yawRate, U.clamp(turn, -1.8, 1.8), 3.2, dt);
+    F.turnTight = tighten;
     F.yaw += F.yawRate * dt;
     // ---- speeds ----
-    F.speed = U.damp(F.speed, F.arc ? 0 : FC.cruise, F.arc ? 1.2 : FC.accel, dt);
-    let targetVy = 0;
-    if (F.arc) targetVy = held ? arcVy(F.ascT, FC) : 0;          // release ↑ → the climb eases to a hover
-    else if (k.down) targetVy = -FC.descend;
-    F.vy = U.damp(F.vy, targetVy, held ? 12 : 1.8, dt);
+    F.speed = U.damp(F.speed, boosting ? FC.boostMax : FC.cruise, FC.accel, dt);   // hold ↑ = faster, release = back to cruise
+    // vertical: a level glide by default; taps/double-taps add metres to climb (liftLeft), followed
+    // with an eased vertical speed (≤ riseSpeed) so the rise never snaps; ↓ descends and cancels it
+    if (k.down) liftLeft = 0;
+    const targetVy = k.down ? -FC.descend : liftLeft > 0.05 ? Math.min(FC.riseSpeed, 2 + liftLeft * 1.3) : 0;
+    F.vy = U.damp(F.vy, targetVy, 2.4, dt);
+    if (F.vy > 0) liftLeft = Math.max(0, liftLeft - F.vy * dt);
     // ---- integrate + collide ----
     const h2 = heading(F.yaw);
     let next = V.add(F.pos, V.add(V.scale(h2, F.speed * dt), [0, F.vy * dt, 0]));
@@ -127,7 +165,7 @@ AG.Flight = (function () {
     next[1] = Math.max(next[1], FC.minAlt);
     // ceiling just above the light threshold: the ending now comes from the fifth fragment,
     // so without it she could rise for ever and lose the fragments below; she hovers here instead
-    if (next[1] > FC.finaleAltitude + 30) { next[1] = FC.finaleAltitude + 30; if (F.vy > 0) F.vy = 0; }
+    if (next[1] > FC.finaleAltitude + 30) { next[1] = FC.finaleAltitude + 30; if (F.vy > 0) F.vy = 0; liftLeft = 0; }
     F.pos = next;
     // ---- body ----
     F.bank = U.damp(F.bank, F.arc ? 0 : U.clamp(-F.yawRate * 0.42, -0.55, 0.55), 4, dt);
@@ -137,7 +175,7 @@ AG.Flight = (function () {
     AG.FSM.setMode(F.arc ? 'ASCENSION' : 'FREE_FLIGHT');
     if (!cloudHit && F.pos[1] > FC.finaleAltitude - 110) { cloudHit = true; AG.U.emit('cloud'); }
     // the light is entered by collecting the fifth fragment (distance check in AG.Fragments)
-    // (this update runs only while she is controllable, so the 15 s reveal timer counts active flight only)
+    // (this update runs only while she is controllable, so the 6 s / 10 s reveal timers count active flight only)
     if (!F.finale && AG.Fragments && AG.Fragments.update(F.pos, AG.FSM.animTime, dt)) enterLight();
     // ---- trail history ----
     trailClock -= dt;
@@ -207,5 +245,5 @@ AG.Flight = (function () {
     return best;
   }
 
-  return Object.assign(F, { PHASES, phaseK, build, reset, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight });
+  return Object.assign(F, { PHASES, phaseK, build, reset, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight, press });
 })();

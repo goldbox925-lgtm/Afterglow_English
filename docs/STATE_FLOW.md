@@ -15,7 +15,7 @@ NUMBNESS ─► FRACTURE ─► AWAKENING ─► RECLAIMING_SELF ─► AFTERGLO
 | 02 | FRACTURE | Cutscene `fracture` (3.2 s). | Click flickering windows to steady them. | `stabilised ≥ need.fragile` (4) | `advance('FRACTURE')` → AWAKENING |
 | 03 | AWAKENING | The light network is seeded from the pulse and the steadied windows. | Click dark buildings (glowing ring) within reach of a lit one. | `awakeningConnections ≥ need.awakening` (5) | `advance('AWAKENING')` → RECLAIMING_SELF |
 | 04 | RECLAIMING_SELF | Cutscene `stand` (8.4 s). | Drag between two lit buildings, or click one and then the other. | `cityLinks ≥ need.links` (5) | `advance('RECLAIMING_SELF')` → AFTERGLOW |
-| 05 | AFTERGLOW | Cutscene `liftoff` (4.8 s); flight and fragments reset. | Steer with mouse or ← →, ↓ to descend, hold ↑ to ascend (mode FREE_FLIGHT ⇄ ASCENSION). Fly within 20 m of each of the five fragments (`js/core/fragments.js`). | Fifth fragment collected → `Flight.enterLight()` → `Flight.finale` | End card after ~13 s → **Play again** → NUMBNESS |
+| 05 | AFTERGLOW | Cutscene `liftoff` (4.8 s); flight and fragments reset. | Steer with ← → (or the mouse; a held arrow turns up to 55 % faster, for a controlled U-turn); level glide with no sinking; tap ↑ for a small lift (about 13 m), double-tap ↑ for a smooth bigger rise (about 45 m); hold ↑ to speed up (21 → 30 m/s, no height change); ↓ to descend (cancels a pending rise). On touch devices an on-screen pad (◀ ▶ ▲ ▼) does the same. Holding ↑ never ends the story. Fly within 20 m of each of the five fragments (`js/core/fragments.js`). | Fifth fragment collected → `Flight.enterLight()` → `Flight.finale` | End card after ~13 s → **Play again** → NUMBNESS |
 
 ## Controls that act on the machine
 
@@ -63,21 +63,17 @@ Measured over 190 generated cities before the fix:
 
 ## Stage 05 fragments (Phase 4)
 
-Five collectibles hang along the flight route, rising toward the light:
-
-1. **VOICE** (blue): straight ahead of her roof, about 80–90 m away.
-2. **COURAGE** (pink): at the mouth of the flight canyon. The way there is either direct, or
-   straight on and left along the first open cross street.
-3. **JOY** (gold): further along the canyon.
-4. **FREEDOM** (violet): high above the canyon.
-5. **SELF-LOVE** (warm white): just below the light threshold.
+Five collectibles appear one at a time, **ahead of her** wherever she is flying:
+VOICE (blue), COURAGE (pink), JOY (gold), FREEDOM (violet), SELF-LOVE (warm white).
 
 How they work:
 
-- **Sequence:** only the next uncollected fragment exists. It appears after **15 s of active flight**,
-  counted only while she is controllable (not during the lift-off, not while paused, not after the
-  ending). After each collection the 15 s wait starts again. A fragment that hasn't appeared yet
-  can't be collected. Replay resets the timer and the sequence.
+- **Sequence:** only the next uncollected fragment exists. The first appears after **6 s of active
+  flight**, each next one **10 s of active flight after the previous collection**. Time counts only
+  while she is controllable (not during the lift-off, not while paused, not after the ending). A
+  fragment that hasn't appeared yet can't be collected. Replay resets the timer and the sequence.
+- **Instruction:** `#fragGoal` shows "COLLECT ALL FIVE FRAGMENTS" at the top, just below the stage
+  card (or the top bar when the card is hidden), until 5/5.
 - **Visibility:** the revealed fragment is drawn after the city without depth testing, so buildings
   never hide it. While it is off screen, the existing hint arrow (also used in stage 01) points to
   it.
@@ -86,11 +82,14 @@ How they work:
   one plays a burst: the flower flares and dissolves while a ring expands (network-node shader,
   kind 5).
 - **Ending:** the fifth calls `AG.Flight.enterLight()`, the existing ending sequence.
-- **Placement:** comes only from the city's geometry (flight avenue, the street in front of her,
-  building boxes) plus a stateless hash. No random generator is used, so the city's random
-  sequence is untouched and each seed gives the same layout.
-  - Every position is checked for free air, and the path from the previous fragment must be
-    open (via the street/canyon corner).
+- **Placement:** chosen at the moment of the reveal from her current position and heading:
+  about 100–120 m ahead, 18–40 m to one side (at most about 22° off her path), at her height
+  (SELF-LOVE 25 m higher). The spot must be free air with an open straight path from her;
+  otherwise fixed fallbacks are tried (other side, nearer, a little higher, finally above the
+  rooftops). Distances and sides come from a stateless hash of the city, so no random generator
+  is used: the same seed and the same flight give the same spots.
+  - If she overshoots, the hint arrow points back and she can U-turn (about 180° in 2.5 s with a
+    held arrow) and collect it.
 - **Ceiling:** the flight is capped 30 m above the light threshold, so she can't rise out of
   reach of the fragments.
 

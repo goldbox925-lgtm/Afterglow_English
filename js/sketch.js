@@ -210,7 +210,7 @@
       document.addEventListener('visibilitychange', () => { if (document.hidden && AG.FSM.playing) AG.FSM.pause(); });
       // arrow keys: look around (01–04) · steer / descend / ASCEND (05). Never scroll the page.
       const ARROW = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', a: 'left', A: 'left', d: 'right', D: 'right', s: 'down', S: 'down' };
-      const setKey = (k, v) => { const n = ARROW[k]; if (!n) return false; AG.Flight.keys[n] = v; return true; };
+      const setKey = (k, v) => { const n = ARROW[k]; if (!n) return false; AG.Flight.press(n, v); return true; };
       window.addEventListener('keyup', (e) => { if (setKey(e.key, false)) e.preventDefault(); });
       window.addEventListener('blur', () => { AG.Flight.keys = {}; });
       window.addEventListener('keydown', (e) => {

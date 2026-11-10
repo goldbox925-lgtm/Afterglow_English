@@ -61,9 +61,43 @@ AG.UI = (function () {
     const ico = document.querySelector(`#fragIcons .fh-ico[data-i="${i}"]`);
     if (ico) { ico.classList.remove('pop'); void ico.offsetWidth; ico.classList.add('pop'); }
   }
+  /* the persistent stage 05 goal: below the stage hint card (or the top bar), until 5/5 */
+  function updateFragGoal(st) {
+    const g = $('fragGoal'), FR = AG.Fragments, body = document.body;
+    const show = !!(FR && FR.ready) && st === 'AFTERGLOW' && body.classList.contains('entered') && !body.classList.contains('ended')
+      && !AG.FSM.cinematic && !AG.Flight.finale && FR.collected < FR.list.length;
+    g.classList.toggle('show', show);
+    if (!show) return;
+    const panel = $('stagePanel'), barBottom = $('brand').getBoundingClientRect().bottom;
+    const below = panel.classList.contains('show') ? panel.getBoundingClientRect().bottom : barBottom;
+    const top = Math.round(Math.max(below, barBottom) + 8);
+    if (g.dataset.top !== String(top)) { g.style.top = top + 'px'; g.dataset.top = String(top); }
+  }
   function hideFragMsg() { clearTimeout(fragMsgTimer); $('fragMsg').classList.remove('show'); fragKey = ''; }
 
+  /* ---------- stage 05 touch flight pad: each button holds the same key as ← → ↑ ↓ ---------- */
+  const isTouch = () => (navigator.maxTouchPoints || 0) > 0 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  function initFlightPad() {
+    document.querySelectorAll('#flightPad .fp-btn').forEach((btn) => {
+      const k = btn.dataset.key;
+      const down = (e) => { e.preventDefault(); e.stopPropagation(); AG.Flight.press(k, true); btn.classList.add('on'); try { btn.setPointerCapture(e.pointerId); } catch (err) {} };
+      const up = (e) => { e.stopPropagation(); if (AG.Flight.keys[k]) AG.Flight.press(k, false); btn.classList.remove('on'); };
+      btn.addEventListener('pointerdown', down);
+      btn.addEventListener('pointerup', up); btn.addEventListener('pointercancel', up); btn.addEventListener('lostpointercapture', up);
+      btn.addEventListener('pointermove', (e) => e.stopPropagation());    // never steers by 'mouse' position
+      btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
+  }
+  function updateFlightPad(st) {
+    const pad = $('flightPad'), F = AG.FSM;
+    const show = st === 'AFTERGLOW' && document.body.classList.contains('entered') && !F.cinematic && !AG.Flight.finale && F.playing && isTouch();
+    if (show === pad.classList.contains('show')) return;
+    pad.classList.toggle('show', show);
+    if (!show) document.querySelectorAll('#flightPad .fp-btn').forEach((b) => { if (b.classList.contains('on')) { AG.Flight.press(b.dataset.key, false); b.classList.remove('on'); } });
+  }
+
   function init(handlers) {
+    initFlightPad();
     $('btnPlay').innerHTML = ICON.play;
     $('btnReplay').innerHTML = ICON.replay;
     $('btnRegen').innerHTML = ICON.regen;
@@ -166,7 +200,7 @@ AG.UI = (function () {
     if (st === 'AFTERGLOW') {
       if (AG.Flight.finale) return null;
       if (F.mode === 'ASCENSION') return null;
-      if (F.stateTime > 50 && F.modeTime > 30) return { title: 'Rise to the light', text: 'Hold ↑ to soar quickly toward the light.' };
+      if (F.stateTime > 50 && F.modeTime > 30) return { title: 'Find the fragments', text: 'Follow the arrow · double-tap ↑ to rise · ↓ to descend.' };
       return { title: def.title, text: def.prompt };
     }
     if (st === 'NUMBNESS') return { title: 'FIND THE LIGHT', text: def.prompt };
@@ -253,6 +287,8 @@ AG.UI = (function () {
       }
     } else th.classList.remove('show');
     updateFragHud(st);
+    updateFragGoal(st);
+    updateFlightPad(st);
     const tr = $('titleReveal');
     const showT = S.title > 0.02;
     if (showT !== tr.classList.contains('show')) tr.classList.toggle('show', showT);

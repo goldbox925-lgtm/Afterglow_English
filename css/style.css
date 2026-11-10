@@ -92,7 +92,15 @@ body.entered #hud { opacity: 1; }
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* ---------- stage 05 fragments: HUD + collection message ---------- */
+/* ---------- stage 05 fragments: persistent goal (top), HUD + collection message ---------- */
+#fragGoal {
+  position: fixed; left: 50%; top: 120px; transform: translateX(-50%); z-index: 11; pointer-events: none; width: max-content; max-width: 92vw;
+  padding: 5px 14px; border-radius: 14px; background: rgba(8, 8, 20, 0.38); border: 1px solid rgba(255, 255, 255, 0.10);
+  font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; color: #fff; text-align: center;
+  text-shadow: 0 0 10px rgba(255, 120, 200, 0.55), 0 0 2px rgba(0, 0, 0, 0.6); opacity: 0; transition: opacity 0.6s;
+}
+#fragGoal.show { opacity: 1; }
+@media (max-width: 860px) { #fragGoal { font-size: 11px; letter-spacing: 0.2em; padding: 4px 11px; } }
 #fragHud {
   position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%) translateY(6px); z-index: 11; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: 0; transition: opacity 0.8s, transform 0.8s; width: max-content; max-width: 92vw;
@@ -131,6 +139,24 @@ body.entered #hud { opacity: 1; }
   #fragMsg { bottom: 124px; }
   #fragMsgText { font-size: clamp(19px, 5.6vw, 26px); }
 }
+
+/* ---------- stage 05 touch flight pad (touch devices only) ---------- */
+#flightPad { position: fixed; inset: auto 0 200px 0; z-index: 13;   /* above the fragment HUD + message band, at the screen edges */
+  pointer-events: none; opacity: 0; transition: opacity 0.5s; }
+#flightPad.show { opacity: 1; }
+#flightPad.show .fp-btn { pointer-events: auto; }
+.fp-group { position: absolute; bottom: 0; display: flex; gap: 6px; }
+.fp-left { left: 8px; } .fp-right { right: 8px; }
+.fp-btn {
+  width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.28); background: rgba(10, 8, 24, 0.45);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: rgba(255, 255, 255, 0.9); display: grid; place-items: center;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; pointer-events: none; padding: 0;
+}
+.fp-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.fp-btn[data-key="left"] svg { transform: rotate(180deg); }
+.fp-btn[data-key="up"] svg { transform: rotate(-90deg); }
+.fp-btn[data-key="down"] svg { transform: rotate(90deg); }
+.fp-btn.on { background: rgba(255, 106, 213, 0.35); border-color: rgba(255, 150, 220, 0.8); box-shadow: 0 0 14px rgba(255, 106, 213, 0.45); }
 
 /* ---------- controls ---------- */
 #controls { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 14px 22px 20px; opacity: 0; transition: opacity 0.9s, transform 0.9s; transform: translateY(8px); pointer-events: none; }
@@ -246,13 +272,18 @@ body.ended #titleReveal { opacity: 0; transition: opacity 1.6s ease; }
 /* ---------- interactive stages ---------- */
 #stagePanel {
   position: fixed; left: 50%; top: 74px; transform: translate(-50%, -8px); z-index: 12; text-align: center; pointer-events: none;
-  padding: 12px 22px 13px; border-radius: 16px; background: rgba(8, 8, 20, 0.42); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08); opacity: 0; transition: opacity 0.8s, transform 0.8s; max-width: min(560px, calc(100vw - 32px));
+  padding: 9px 18px 10px; border-radius: 14px; background: rgba(8, 8, 20, 0.42); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08); opacity: 0; transition: opacity 0.8s, transform 0.8s; width: max-content; max-width: min(460px, calc(100vw - 32px));
 }
 #stagePanel.show { opacity: 1; transform: translate(-50%, 0); }
-#stageTitle { letter-spacing: 0.42em; text-transform: uppercase; font-size: clamp(17px, 1.35vw, 21px); font-weight: 400; color: #fff; text-shadow: 0 0 14px rgba(255, 120, 200, 0.6); }
-#stageText { margin-top: 8px; font-size: clamp(16px, 1.15vw, 19px); color: var(--dim); line-height: 1.5; }
-#stageCount { margin-top: 8px; display: flex; gap: 7px; justify-content: center; }
+#stageTitle { letter-spacing: 0.36em; text-transform: uppercase; font-size: clamp(14px, 1.1vw, 17px); font-weight: 400; color: #fff; text-shadow: 0 0 14px rgba(255, 120, 200, 0.6); }
+#stageText { margin-top: 5px; font-size: clamp(14px, 0.98vw, 16px); color: var(--dim); line-height: 1.42; }
+#stageCount { margin-top: 6px; display: flex; gap: 6px; justify-content: center; }
+@media (max-width: 860px) {
+  #stagePanel { max-width: calc(100vw - 24px); padding: 8px 13px 9px; }
+  #stageTitle { font-size: 14px; letter-spacing: 0.3em; }
+  #stageText { font-size: 13.5px; }
+}
 #stageCount:empty { display: none; }
 #stageCount i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.45); display: block; transition: all 0.5s; }
 #stageCount i.on { border-color: transparent; box-shadow: 0 0 12px currentColor; background: currentColor; }

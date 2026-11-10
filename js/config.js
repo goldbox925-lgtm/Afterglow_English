@@ -86,7 +86,7 @@ AG.CONFIG = {
     { id: 'RECLAIMING_SELF', num: '04', title: 'RECLAIMING YOURSELF', subtitle: 'The city that listens',
       prompt: 'Connect five pairs of golden points on the buildings: drag a line between them or click one, then the other.' },
     { id: 'AFTERGLOW',       num: '05', title: 'AFTERGLOW',       subtitle: 'Become the light',
-      prompt: 'Mouse or ← → to turn · ↓ to descend · hold ↑ to rise toward the light' }
+      prompt: 'Mouse or ← → to turn · double-tap ↑ to rise · hold ↑ to speed up · ↓ to descend' }
   ],
 
   interaction: {
@@ -107,6 +107,12 @@ AG.CONFIG = {
   /* Free flight (state 05). Units: metres, seconds, radians. */
   flight: {
     cruise: 21, boostMax: 30, accel: 1.4, turnRate: 1.05, mouseTurn: 1.25, deadZone: 0.08,
+    tapMax: 0.22,              // s: ↑ released sooner than this = a tap (small lift); held longer = speed boost
+    tapLift: 13,               // m climbed per single ↑ tap (eased)
+    doubleTapWindow: 0.4,      // s: a second tap within this = a double-tap
+    doubleLift: 32,            // extra m for the second tap of a double-tap (≈ 45 m in all, eased)
+    riseSpeed: 12,             // m/s: the fastest a lift climbs (it eases in and out)
+    turnTighten: 0.55,         // a held ← / → turns up to 55 % faster (controlled U-turn)
     descend: 10, ascend: 19, minAlt: 9, wallMargin: 7, probe: 28,
     finaleAltitude: 420        // metres: reaching it while holding ↑ after ≥ 18 s of ascension enters the light
   },

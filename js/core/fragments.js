@@ -1,14 +1,22 @@
 /* =====================================================================
    Fragments — the five collectibles of state 05 (AFTERGLOW)
    ---------------------------------------------------------------------
-   Five luminous, flower-like crystal fragments of her recovery hang in
-   the air along her flight route, rising toward the light:
+   Five luminous, flower-like crystal fragments of her recovery appear one
+   at a time AHEAD of her: VOICE (blue), COURAGE (pink), JOY (gold),
+   FREEDOM (violet), SELF-LOVE (warm; a little higher, toward the light).
 
-     1 VOICE      blue     straight ahead of her roof, in view as soon as she can fly
-     2 COURAGE    pink     at the mouth of the flight canyon
-     3 JOY        gold     further along the canyon, a little higher
-     4 FREEDOM    violet   high above the canyon
-     5 SELF-LOVE  warm     just below the light threshold
+   Pacing: the first appears after FIRST_DELAY (6 s) of active flight, each
+   next one NEXT_DELAY (10 s) after the previous was collected. Active flight
+   only: the timer runs in update(), which AG.Flight calls only while she is
+   controllable (not during the lift-off, not while paused, not after the
+   ending). Replay resets it (reset()).
+
+   Placement (at the moment of the reveal): ~100–120 m ahead of her current
+   position and heading, 18–40 m to one side (≤ ~22° off her path), at her
+   height (SELF-LOVE +25 m). It must be free air with an open straight path
+   from her; otherwise deterministic fallbacks are tried: the other side,
+   nearer, straight ahead, then headings 17–46° to either side (at her height,
+   then 15 / 30 m higher), finally just above the rooftops.
 
    Collection: she collects a fragment by flying within COLLECT_RADIUS of
    it. The check uses p5.js vectors:
@@ -18,13 +26,9 @@
    drawn by the network-node shader, kind 5). The fifth collection calls
    AG.Flight.enterLight(): the existing ending sequence.
 
-   Deterministic: positions come only from the city's geometry (the
-   flight avenue, the street in front of her, building boxes) plus small
-   offsets from a stateless hash of that geometry. No random generator is
-   used, so neither the city's random sequence nor any other gameplay
-   randomness is consumed. Every position is checked against all
-   buildings, and the path from one fragment to the next must be open,
-   so none can be unreachable.
+   Deterministic: distances and sides come from a stateless hash of the city
+   (no random generator), so the same seed and the same flight give the same
+   spots; the city's random sequence is never consumed.
    ===================================================================== */
 window.AG = window.AG || {};
 
@@ -32,7 +36,8 @@ AG.Fragments = (function () {
   const U = AG.U;
   const COLLECT_RADIUS = 20;     // metres
   const BURST = 1.0;             // seconds of collection feedback
-  const REVEAL_DELAY = 15;       // seconds of ACTIVE flight before the next fragment appears
+  const FIRST_DELAY = 6;         // seconds of ACTIVE flight before the first fragment appears
+  const NEXT_DELAY = 10;         // ... and after each collection, before the next one appears
   // names, colours and descriptions from the project's Collectibles reference sheet;
   // `found` = the collection message (pattern from the HUD reference recording)
   const DEFS = [
@@ -47,12 +52,13 @@ AG.Fragments = (function () {
     const y = 1 - (i + 0.5) / 14 * 2, r = Math.sqrt(1 - y * y), a = i * 2.39996;
     return [Math.cos(a) * r, y * 0.8, Math.sin(a) * r];
   });
-  /* Sequence: only the next uncollected fragment exists. It is revealed after REVEAL_DELAY
-     seconds of active flight (counted in update(), which AG.Flight calls only while she is
-     controllable: not during the lift-off, not while paused, not after the ending); after
-     each collection the wait starts again. A fragment that is not revealed cannot be collected. */
+  /* Sequence: only the next uncollected fragment exists. It is revealed after FIRST_DELAY /
+     NEXT_DELAY seconds of active flight (counted in update(), which AG.Flight calls only while
+     she is controllable: not during the lift-off, not while paused, not after the ending);
+     after each collection the wait starts again. A fragment that is not revealed cannot be
+     collected. */
   const Fr = { list: [], collected: 0, ready: false, waitT: 0, shown: false };
-  let p = null, her = null;
+  let p = null, her = null, boxes = [], heroBox = null, keyJ = null;
 
   /* a stateless 0..1 value per city: hash of the city's own building boxes */
   function cityKey(info) {
@@ -73,55 +79,36 @@ AG.Fragments = (function () {
   function build(info, p5inst) {
     p = p5inst;
     her = p.createVector(0, 0, 0);
-    const FC = AG.CONFIG.flight, H0 = info.hero.H0, X = info.flightX, Z = info.frontStreetZ, key = cityKey(info);
-    const j = (k, a) => (U.hash(key * 0.0137 + k * 7.31 + a) - 0.5);          // stateless jitter −0.5..0.5
-    // the planned route: straight ahead of her roof → the flight canyon → up toward the light.
-    // VOICE sits ~85 m ahead over the low 'open vista' blocks, so it is in view the moment the
-    // lift-off ends (about 4 s of flight away), not on top of her or the camera.
-    const plan = [
-      [0.6 + 16 * j(0, 1), H0 + 3 + 4 * j(0, 2), -24 - 85 + 14 * j(0, 3)],
-      [X, H0 - 6 + 8 * j(1, 2), Z - 90 + 30 * j(1, 1)],
-      [X, H0 + 30 + 14 * j(2, 2), Z - 260 + 50 * j(2, 1)],
-      [X, H0 + 140 + 30 * j(3, 2), Z - 420 + 50 * j(3, 1)],
-      [X, FC.finaleAltitude - 18, Z - 560 + 50 * j(4, 1)]
-    ];
-    const boxes = info.boxes, margin = FC.wallMargin * 0.5 + 2;   // the same clearance her own flight keeps from walls
-    const heroBox = boxes.find((b) => b.hero);                       // her own roof: she takes off from it, never collides with it
-    Fr.list = [];
-    let prev = [0.6, H0 + 4.2, -24];                                          // where the flight starts
-    plan.forEach((pt, k) => {
-      // nudge (deterministically) until the spot is free air AND the way there from the previous one is open
-      const tries = [[0, 0], [0, 12], [0, -12], [0, 24], [-30, 0], [30, 0], [-30, 12], [30, 12], [0, 36], [-60, 0], [60, 0], [0, 48]];
-      let pos = null, turnPoints = [];
-      for (const [dz, dy] of tries) {
-        const c = [pt[0], Math.max(FC.minAlt + 8, Math.min(FC.finaleAltitude - 10, pt[1] + dy)), pt[2] + dz];
-        if (!clearAt(c, boxes, margin)) continue;
-        // the way from the previous fragment must be open. Into the canyon (k = 1): the direct way;
-        // else straight on from VOICE and left along the first open cross street into the canyon;
-        // else back along the street in front of her to the canyon corner
-        const ym = (prev[1] + c[1]) / 2;
-        const open = (legs) => legs.every(([u, v]) => AG.Flight.segmentClear(u, v, 3, heroBox) >= 0.999);
-        let route = null;
-        if (open([[prev, c]])) route = [];
-        else if (k === 1) {
-          const zs = [];
-          for (let z = Math.max(prev[2], c[2]) + 10; z >= Math.min(prev[2], c[2]) - 120; z -= 2) zs.push(z);
-          zs.sort((u, v) => Math.abs(u - c[2]) - Math.abs(v - c[2]));
-          for (const zc of zs) {
-            const a1 = [prev[0], ym, zc], a2 = [X, ym, zc];
-            if (open([[prev, a1], [a1, a2], [a2, c]])) { route = [a1, a2]; break; }
-          }
-          if (!route && open([[prev, [prev[0], ym, Z]], [[prev[0], ym, Z], [X, ym, Z]], [[X, ym, Z], c]])) route = [[prev[0], ym, Z], [X, ym, Z]];
-        }
-        if (!route) continue;
-        pos = c; turnPoints = route; break;
-      }
-      if (!pos) pos = [pt[0], FC.finaleAltitude - 10, pt[2]];               // last resort: open sky above the canyon
-      Fr.list.push({ id: DEFS[k].id, col: DEFS[k].col, desc: DEFS[k].desc, found: DEFS[k].found, pos: p.createVector(pos[0], pos[1], pos[2]), route: turnPoints, collected: false, at: -1e9 });
-      prev = pos;
-    });
+    boxes = info.boxes; heroBox = boxes.find((b) => b.hero);
+    const key = cityKey(info);
+    keyJ = (k, a) => (U.hash(key * 0.0137 + k * 7.31 + a) - 0.5);            // stateless jitter −0.5..0.5
+    // positions are chosen when each fragment is revealed (placeAhead)
+    Fr.list = DEFS.map((d) => ({ id: d.id, col: d.col, desc: d.desc, found: d.found, pos: p.createVector(0, 0, 0), collected: false, at: -1e9 }));
     Fr.ready = true;
     reset();
+  }
+
+  /* where the next fragment appears: ahead of her, moderately to one side, reachable */
+  function placeAhead(k, herPos, yaw) {
+    const FC = AG.CONFIG.flight, margin = FC.wallMargin * 0.5 + 2;
+    const fwd = [Math.sin(yaw), 0, -Math.cos(yaw)], right = [Math.cos(yaw), 0, Math.sin(yaw)];
+    const D = 110 + 20 * keyJ(k, 1), L = 18 + 44 * Math.abs(keyJ(k, 2)), side = keyJ(k, 3) > 0 ? 1 : -1;
+    const lift = k === DEFS.length - 1 ? 25 : 0;
+    const yMin = FC.minAlt + 8, yMax = FC.finaleAltitude + 15;
+    const at = (d, l, dy) => [herPos[0] + fwd[0] * d + right[0] * l, U.clamp(herPos[1] + lift + dy, yMin, yMax), herPos[2] + fwd[2] * d + right[2] * l];
+    const ok = (c) => clearAt(c, boxes, margin) && AG.Flight.segmentClear(herPos, c, 3, heroBox) >= 0.999;
+    const tries = [[D, side * L, 0], [D, -side * L, 0], [D * 0.75, side * L * 0.7, 0], [D * 0.75, -side * L * 0.7, 0], [D * 1.3, side * L, 0],
+      [D, 0, 0], [D * 0.6, 0, 0]];
+    for (const [d, l, dy] of tries) { const c = at(d, l, dy); if (ok(c)) return c; }
+    // her heading is blocked (a wall ahead): try headings a little to either side at her height,
+    // then a little higher, before anything else
+    const turned = (o, d, dy) => { const y = yaw + o; return [herPos[0] + Math.sin(y) * d, U.clamp(herPos[1] + lift + dy, yMin, yMax), herPos[2] - Math.cos(y) * d]; };
+    for (const dy of [0, 15, 30]) for (const o of (dy ? [0, 0.3, 0.55, 0.8] : [0.3, 0.55, 0.8])) for (const s of [side, -side]) for (const d of [D, D * 0.65]) {
+      const c = turned(s * o, d, dy); if (ok(c)) return c;
+    }
+    // last resort: just above the rooftops along the way ahead (a double-tap of ↑ gets her there)
+    for (let dy = 45; dy <= 300; dy += 15) { const c = at(D, side * L, dy); if (ok(c)) return c; }
+    return at(D * 0.6, 0, 0);
   }
 
   function reset() { Fr.collected = 0; Fr.waitT = 0; Fr.shown = false; Fr.list.forEach((f) => { f.collected = false; f.at = -1e9; }); }
@@ -135,14 +122,16 @@ AG.Fragments = (function () {
     if (!f) return false;
     if (!Fr.shown) {                                                   // waiting: count active flight only
       Fr.waitT += dt || 0;
-      if (Fr.waitT < REVEAL_DELAY) return false;
+      if (Fr.waitT < (Fr.collected === 0 ? FIRST_DELAY : NEXT_DELAY)) return false;
+      const c = placeAhead(Fr.collected, herPos, AG.Flight.yaw);
+      f.pos.set(c[0], c[1], c[2]);
       Fr.shown = true; f.shownAt = at;
       U.emit('fragmentReveal', { id: f.id, n: Fr.collected + 1, pos: [f.pos.x, f.pos.y, f.pos.z] });
     }
     her.set(herPos[0], herPos[1], herPos[2]);
     if (p5.Vector.dist(f.pos, her) < COLLECT_RADIUS) {                 // the distance check
       f.collected = true; f.at = at; Fr.collected++;                   // counted exactly once
-      Fr.shown = false; Fr.waitT = 0;                                  // the next one waits 15 s again
+      Fr.shown = false; Fr.waitT = 0;                                  // the next one waits NEXT_DELAY s
       U.emit('fragment', { id: f.id, n: Fr.collected, pos: [f.pos.x, f.pos.y, f.pos.z] });
       return Fr.collected === Fr.list.length;
     }
@@ -170,5 +159,5 @@ AG.Fragments = (function () {
     return out;
   }
 
-  return Object.assign(Fr, { build, reset, update, sprites, active, COLLECT_RADIUS, REVEAL_DELAY });
+  return Object.assign(Fr, { build, reset, update, sprites, active, COLLECT_RADIUS, FIRST_DELAY, NEXT_DELAY });
 })();
