@@ -24,7 +24,7 @@ AG.Renderer = (function () {
   let p, gl;
   let SH = {};
   let quad, sky, rainGeo = [], world = null;
-  let charQuad = null, partGeo = { trail: [], sparks: [], cloud: [], beacon: [], smoke: [] }, netGeo = {}, smokeSrc = null;
+  let charQuad = null, partGeo = { trail: [], sparks: [], cloud: [], beacon: [], smoke: [], glint: [] }, netGeo = {}, smokeSrc = null;
   const PAL = new Float32Array(AG.CONFIG.interaction.colours.flat());
   let sceneFB, bA, bB, cA, cB;
   let tier = AG.CONFIG.quality.tiers[AG.CONFIG.quality.initial];
@@ -99,10 +99,36 @@ AG.Renderer = (function () {
     }
     return B.build(p);
   }
+  /* the light trail: GPU sprites ORDERED along 3 thin lines (aPosition = [u along the line,
+     line / 3, du]); each sprite is one ribbon segment */
+  function strandMesh(name, n, strands) {
+    const per = Math.max(8, Math.floor(n / strands)), B = new AG.GeometryBuilder(name);
+    for (let k = 0; k < strands; k++) for (let j = 0; j < per; j++) {
+      const c = [j / per, (k + 0.5) / strands, 1 / per], d = [0, 0, 0, 0];
+      B._ensure(4);
+      const a = B.rawVertex(c, [0, 1, 0], -1, -1, d), b = B.rawVertex(c, [0, 1, 0], 1, -1, d),
+            e = B.rawVertex(c, [0, 1, 0], 1, 1, d), f = B.rawVertex(c, [0, 1, 0], -1, 1, d);
+      B.rawTri(a, b, e); B.rawTri(a, e, f);
+    }
+    return B.build(p);
+  }
+  /* one sprite per LightParticle slot (aPosition.x = slot index) */
+  function slotMesh(name, n) {
+    const B = new AG.GeometryBuilder(name);
+    for (let i = 0; i < n; i++) {
+      const c = [i, 0, 0], d = [0, 0, 0, 0];
+      B._ensure(4);
+      const a = B.rawVertex(c, [0, 1, 0], -1, -1, d), b = B.rawVertex(c, [0, 1, 0], 1, -1, d),
+            e = B.rawVertex(c, [0, 1, 0], 1, 1, d), f = B.rawVertex(c, [0, 1, 0], -1, 1, d);
+      B.rawTri(a, b, e); B.rawTri(a, e, f);
+    }
+    return B.build(p);
+  }
   function buildParticles() {
     const k = tier.particles || 1;
     Object.values(partGeo).forEach((list) => list.forEach((g) => { if (p.freeGeometry) p.freeGeometry(g); }));
-    partGeo.trail = particleMesh('trail', Math.round(1100 * k), 11);
+    partGeo.trail = strandMesh('trail', Math.round(480 * k), 3);     // 3 lines (was 1100 scattered sprites)
+    partGeo.glint = slotMesh('glint', AG.LightParticles.MAX);
     partGeo.sparks = particleMesh('sparks', Math.round(260 * k), 12);
     partGeo.cloud = particleMesh('cloud', Math.round(2600 * k), 13);
     partGeo.beacon = particleMesh('beacon', 1, 14);
@@ -423,7 +449,16 @@ AG.Renderer = (function () {
     if (CH.trail > 0.01 && fl.ready) {
       sh.setUniform('uKind', 0); sh.setUniform('uAmount', CH.trail); sh.setUniform('uSpeed', CH.speedN);
       sh.setUniform('uTrail', AG.CharacterDirector.trailPoints(t, 24));
+      // the streamers lean to her left by default and swing out of her turns
+      sh.setUniform('uSweep', AG.U.clamp(-0.55 - (fl.yawRate || 0) * 0.9, -1.4, 1.0));
       partGeo.trail.forEach((g) => p.model(g));
+    }
+    // the glints shed by the trail (p5.js LightParticle objects, CPU) — one draw call
+    const LP = AG.LightParticles;
+    if (LP.list.length) {
+      LP.pack();
+      sh.setUniform('uKind', 7); sh.setUniform('uGlint', LP.posBuf); sh.setUniform('uGlintC', LP.colBuf);
+      partGeo.glint.forEach((g) => p.model(g));
     }
     if (CH.sparkle > 0.01) {
       const m = CH.main, b = m.anchorPos;

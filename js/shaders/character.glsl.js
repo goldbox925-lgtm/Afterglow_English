@@ -8,9 +8,12 @@
      uMode 0 = image · 1 = contact shadow · 2 = soft aura sprite
    · PARTICLES: GPU-animated billboards (positions computed per frame in
      the vertex shader — one draw call each):
-     uKind 0 = light trail behind her (follows her recent path)
+     uKind 0 = light trail: thin streamers from her feet along her recent
+               path (ribbon segments, see below)
            1 = sparks of the aura while she levitates / flies
            2 = the luminous cloud (pink, violet, cyan, white)
+           7 = LightParticle glints (js/fx/lightParticles.js): positions,
+               colours and sizes come from the CPU each frame (uGlint*)
    ===================================================================== */
 AG.SHADERS.character = {
   vert: AG.SHADERS.header + `
@@ -108,7 +111,31 @@ uniform vec3 uBeaconPos, uBeaconRight, uBeaconUp;
 uniform float uBeacon, uBeaconHint;
 uniform vec4 uSmoke[8];       // smoke columns: xyz = base (top of a broken tower), w = density
 uniform vec3 uSmokeCol;
+uniform float uSweep;         // trail sweep to her side: < 0 left, > 0 right (follows her turning)
+uniform vec4 uGlint[48];      // LightParticle: xyz = position, w = alpha
+uniform vec4 uGlintC[48];     // LightParticle: rgb = colour, w = size (m)
 out vec2 vUv; out vec3 vCol; out float vA; out vec3 vWorld;
+/* one line of the light trail at u (0 = just behind her feet … 1 = its end). The three lines
+   (cyan, pink, magenta) run together as one thin bundle along her ACTUAL recent path (uTrail,
+   newest first) for ~2.4–3.6 m, so they curve as she turns and always point back along her
+   direction of travel. A gentle droop and a slight swing out of her turns (uSweep) keep the
+   bundle readable from the chase camera; the lines twist slowly around each other with only a
+   few centimetres between them. They end long before the camera (no rays toward the lens). */
+const float TRAIL_STRANDS = 3.0;
+vec3 strandPos(float k, float u){
+  float spacing = max(uSpeed * 30.0 * 0.05, 0.12);              // metres between path samples
+  float fi = clamp(u * (2.4 + 1.2 * uSpeed) / spacing, 0.0, 21.999); int i = int(floor(fi));
+  vec3 c = mix(uTrail[i], uTrail[i + 1], fract(fi)) + vec3(0.0, -0.78, 0.0);
+  vec3 tg = uTrail[0] - uTrail[min(i + 2, 23)];
+  vec3 T = dot(tg, tg) > 1e-4 ? normalize(tg) : vec3(0.0, 0.0, -1.0);
+  vec3 R = normalize(cross(T, abs(T.y) > 0.95 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
+  vec3 Up = cross(R, T);
+  float tw = k * 2.094 + u * 2.2 - uTime * 0.7;                  // slow twist around the bundle
+  float rr = 0.02 + 0.06 * u;                                     // a few cm apart, widening a little
+  float lat = uSweep * 1.1 * pow(u, 1.3) + cos(tw) * rr;
+  float ver = -1.3 * pow(u, 1.4) + sin(tw) * rr * 0.7;
+  return c - T * 0.25 + R * lat + Up * ver;                       // starts just behind her feet
+}
 vec3 pick(float h){
   if (h < 0.3) return vec3(1.0, 0.32, 0.78);
   if (h < 0.55) return vec3(0.62, 0.38, 1.0);
@@ -119,14 +146,36 @@ void main(){
   vec3 s = aPosition; vec4 q = aVertexColor;
   vec3 p; float size; float a;
   if (uKind < 0.5){
-    float age = fract(s.x + uTime * (0.55 + q.z * 0.6));
-    float fi = age * 22.0; int i = int(floor(fi));
-    p = mix(uTrail[i], uTrail[i + 1], fract(fi));
-    vec3 j = (vec3(hash11(s.y * 91.0), hash11(s.z * 57.0), hash11(s.x * 33.0)) - 0.5) * 2.0;
-    p += j * (0.12 + age * (0.8 + 1.8 * uSpeed));
-    p.y -= age * age * 0.6;
-    size = (0.035 + 0.16 * age * (0.4 + q.y)) * (1.0 + uSpeed);
-    a = pow(1.0 - age, 1.6) * uAmount;
+    // LIGHT TRAIL: each sprite is one short ribbon segment of a streamer (s.x = u along it,
+    // s.y = strand), stretched in screen space from strandPos(u) to strandPos(u + du)
+    float k = floor(s.y * TRAIL_STRANDS + 0.001), u = s.x, du = s.z;
+    vec3 p0 = strandPos(k, u), p1 = strandPos(k, min(u + du * 1.35, 1.0));
+    vec4 v0 = uView * vec4(p0, 1.0), v1 = uView * vec4(p1, 1.0);
+    vec2 d = v1.xy - v0.xy; float dl = length(d);
+    vec2 dn = dl > 1e-5 ? d / dl : vec2(1.0, 0.0), pn = vec2(-dn.y, dn.x);
+    // very thin and tapered: ~2 cm half-width behind her feet → ~0.4 cm at the end
+    float w = mix(0.02, 0.004, pow(u, 0.8));
+    vec4 vpT = v0;
+    vpT.xy += dn * (aTexCoord.x * 0.5 + 0.5) * dl + pn * aTexCoord.y * w;
+    // restrained colour: one cyan, one pink, one magenta line (a little lighter near her)
+    vec3 cK = k < 0.5 ? vec3(0.35, 0.88, 1.0) : k < 1.5 ? vec3(1.0, 0.45, 0.82) : vec3(0.82, 0.32, 1.0);
+    vCol = mix(mix(cK, vec3(1.0), 0.35), cK, smoothstep(0.0, 0.35, u));
+    float shimmer = 0.88 + 0.12 * sin(u * 10.0 - uTime * 3.0 + k * 2.1);
+    // emerges softly behind her, fades out toward its end and well before the camera
+    a = uAmount * pow(1.0 - u, 1.2) * shimmer * smoothstep(0.0, 0.12, u) * smoothstep(1.8, 3.2, length(p0 - uCamPos));
+    vUv = vec2(aTexCoord.x * 0.0, aTexCoord.y); vA = a; vWorld = p0;
+    gl_Position = uProj * vpT;
+    return;
+  } else if (uKind > 6.5){
+    // LIGHTPARTICLE GLINTS (CPU-driven): one sprite per uGlint slot; alpha 0 = unused slot
+    int gi = int(s.x + 0.5);
+    vec4 g = uGlint[gi], gc = uGlintC[gi];
+    p = g.xyz; a = g.w * smoothstep(1.5, 3.0, length(p - uCamPos)); size = a > 0.0 ? gc.w : 0.0;
+    vec4 vpG = uView * vec4(p, 1.0);
+    vpG.xy += aTexCoord * size;
+    vUv = aTexCoord; vCol = gc.rgb; vA = a; vWorld = p;
+    gl_Position = uProj * vpG;
+    return;
   } else if (uKind < 1.5){
     float life = fract(q.w + uTime * (0.25 + q.z * 0.3));
     vec3 dir = normalize(s - 0.5 + 1e-3);
@@ -205,7 +254,16 @@ in vec2 vUv; in vec3 vCol; in float vA; in vec3 vWorld;
 out vec4 outColor;
 uniform float uKind;
 void main(){
-  if (uKind > 5.5){
+  if (uKind < 0.5){
+    // trail ribbon: bright thin core, soft falloff across its width
+    float x = vUv.y;
+    float g = exp(-x * x * 5.0) + 0.9 * exp(-x * x * 40.0);
+    vec3 col = vCol * g * vA * 3.2;
+    col *= 1.0 - fogAmount(vWorld) * 0.6;
+    outColor = vec4(col, 1.0);
+    return;
+  }
+  if (uKind > 5.5 && uKind < 6.5){
     float r2s = dot(vUv, vUv);
     if (r2s > 1.0) discard;
     float al = vA * exp(-r2s * 2.2) * (0.65 + 0.35 * vnoise(vec3(vUv * 2.0, uTime * 0.2 + vWorld.y * 0.02)));
@@ -214,7 +272,7 @@ void main(){
     outColor = vec4(vCol * al, al);
     return;
   }
-  if (uKind > 2.5){
+  if (uKind > 2.5 && uKind < 6.5){
     vec3 bc;
     if (uKind < 3.5){ float m = max(abs(vUv.x), abs(vUv.y)); float g = smoothstep(1.0, 0.7, m); bc = vCol * g * vA * 3.2 + vec3(1.0) * smoothstep(0.6, 0.0, m) * vA * 1.5; }
     else if (uKind < 4.5){ float r = dot(vUv, vUv); if (r > 1.0) discard; bc = vCol * exp(-r * 3.0) * vA * 1.6 + vec3(1.0, 0.92, 0.96) * exp(-r * 40.0) * vA * 2.0; }
@@ -225,9 +283,10 @@ void main(){
   }
   float r2 = dot(vUv, vUv);
   if (r2 > 1.0) discard;
-  float g = uKind > 1.5 ? exp(-r2 * 2.6) : exp(-r2 * 4.0) + 0.6 * exp(-r2 * 30.0);
-  vec3 col = vCol * g * vA * (uKind > 1.5 ? 1.0 : 2.2);
-  col *= 1.0 - fogAmount(vWorld) * (uKind > 1.5 ? 0.35 : 0.8);
+  bool cloudK = uKind > 1.5 && uKind < 2.5;
+  float g = cloudK ? exp(-r2 * 2.6) : exp(-r2 * 4.0) + 0.6 * exp(-r2 * 30.0);
+  vec3 col = vCol * g * vA * (cloudK ? 1.0 : 2.2);
+  col *= 1.0 - fogAmount(vWorld) * (cloudK ? 0.35 : 0.8);
   outColor = vec4(col, 1.0);
 }
 `

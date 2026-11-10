@@ -41,6 +41,7 @@
       AG.CharacterDirector.setInfo(w.info);
       AG.Flight.build(w.info);
       AG.Fragments.build(w.info, p);          // stage 05 collectibles (deterministic from the city)
+      AG.LightParticles.clear();
       const vantage = U.v3.add(AG.CharacterDirector.spots.lie, [3, 10, 27]);
       AG.Restoration.init(p, w.info, vantage);
       AG.Interactions.build(w.info, AG.Restoration);
@@ -73,6 +74,7 @@
       AG.Renderer.init(p);
       AG.Input.bind(p.canvas);
       AG.UI.init(handlers);
+      AG.LightParticles.init(p);
       AG.Story.bindEvents();
       AG.UI.setLoading('Generating the city…', false);
       AG.CharacterAssets.load(p, 'A');
@@ -123,6 +125,8 @@
       const S = AG.Story.compute(dt, playing, input, music);
       if (!entered) { S.fade = Math.max(S.fade, 0.35); }
       const CH = AG.CharacterDirector.update(F.animTime, S);
+      // the trail's glints (p5.js LightParticle objects): advanced only while the story plays
+      if (entered && playing) AG.LightParticles.update(dt, F.animTime, CH);
       const cam = AG.Camera.update(F.animTime, dt, rt, input);
       AG.Audio.update(S, F.animTime, dt, playing);
       AG.Renderer.freeze = U.damp(AG.Renderer.freeze, entered && !playing ? 1 : 0, 4, dt);

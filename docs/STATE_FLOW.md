@@ -131,3 +131,38 @@ stage 05):
 
 Replay hides the message and the count returns to 0. The descriptions come from the
 Collectibles reference sheet; the message pattern comes from the HUD reference recording.
+
+## Stage 05 light trail and glints
+
+**Light trail** (GPU; `js/shaders/character.glsl.js` `strandPos` / uKind 0, `js/render/renderer.js` `strandMesh`):
+- **3 very thin lines** (cyan, pink, magenta), drawn from 480 ordered GPU sprites × the quality
+  tier's particle factor. The old trail used 1100 scattered sprites. Each sprite is one short
+  ribbon segment of a line.
+- The lines start just behind her feet and run together as one bundle along her **actual
+  recent path** for ~2.4–3.6 m (longer when she is faster). So they always point back along her
+  direction of travel and curve as she turns.
+- A gentle droop (1.3 m at the end) and a swing out of her turns (`uSweep` from
+  `Flight.yawRate`; slightly to her left when flying straight) keep the bundle readable from the
+  chase camera. The lines twist slowly around each other, 2–8 cm apart.
+- Tapered from ~2 cm to ~0.4 cm half-width. They fade in just behind her, fade out toward their
+  end, and fade before the camera (no rays toward the lens). Only a soft shimmer, no pulses.
+- Strength: `CharacterDirector` `trail`, unchanged (free flight and the finale glide; none in
+  the ascent).
+
+**Glints** (CPU; `js/fx/lightParticles.js`, drawn by uKind 7): a few subtle sparkles on the bundle.
+
+```
+spawn   while she flies (not during scripted scenes, not in the ascent), rate = 7/s ×
+        trail strength × (0.35 + 0.65 × speed): about 3–6 alive at a time. Born on the bundle
+        a little behind her feet, moving with her at ~95 % of her speed. Skipped if MAX (48)
+        are alive.
+update  every playing frame: acc = gentle p.noise() swirl + slight buoyancy − drag;
+        vel += acc·dt; pos += vel·dt; age += dt (dt from p.deltaTime).
+remove  isDead() (age ≥ life, 0.6–1.1 s); a reverse loop splices dead ones out.
+draw    display() writes position / alpha / colour / size (2–4 cm) into one of 48 GPU slots;
+        the renderer draws all slots in one call. Alpha ≤ 0.6: fade in, twinkle, fade out.
+pause   not updated (they hold still). Replay, a new city, or leaving stage 05 clears them.
+```
+
+They use a stateless hash for their randomness, never `p.random()`, so the city's seeded
+sequence is untouched.
