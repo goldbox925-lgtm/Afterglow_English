@@ -243,7 +243,11 @@ AG.Renderer = (function () {
     sh.setUniform('uSpot', F.spots.spots); sh.setUniform('uSpotC', F.spots.cols);
     sh.setUniform('tField', F.spots.field); sh.setUniform('uFieldBox', F.spots.box);
     sh.setUniform('uDamage', S.damage); sh.setUniform('uEmber', S.ember);
-    sh.setUniform('uAudioMid', AG.Reactivity.drive.mid); sh.setUniform('uAudioTreble', AG.Reactivity.drive.treble);
+    // audio → city: bass → building glow, mid → window pulse, accents/treble → sparkles (strengths per stage)
+    const AR = AG.Reactivity, CC = AR.city || AG.CONFIG.reactivity.city;
+    sh.setUniform('uAudioBass', AR.drive.bass * CC.bassGlow);
+    sh.setUniform('uAudioMid', AR.drive.mid * CC.midPulse);
+    sh.setUniform('uAudioTreble', Math.max(AR.drive.treble, (AR.accent || 0) * CC.sparkAccent)); sh.setUniform('uSparkNear', CC.sparkNear);
     geos.forEach((g) => p.model(g));
   }
   function drawNeon(F, S, geos) {
@@ -459,9 +463,10 @@ AG.Renderer = (function () {
     p.blendMode(p.BLEND); gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
     p.shader(SH.sky); common(SH.sky, F);
     // bass → the glow the city throws on the sky (identical to the original when the drive is 0)
-    const bass = AG.Reactivity.drive.bass, gk = 1 + 1.2 * bass;
+    // strengths come from AG.CONFIG.reactivity.sky (per stage, eased in reactivity.js)
+    const bass = AG.Reactivity.drive.bass, SK = AG.Reactivity.sky || AG.CONFIG.reactivity.sky, gk = 1 + SK.gain * bass;
     SH.sky.setUniform('uZenith', S.zenith); SH.sky.setUniform('uHorizon', S.horizon);
-    SH.sky.setUniform('uCityGlow', [S.cityGlow[0] * gk + 0.14 * bass, S.cityGlow[1] * gk + 0.05 * bass, S.cityGlow[2] * gk + 0.16 * bass]);
+    SH.sky.setUniform('uCityGlow', [S.cityGlow[0] * gk + SK.add[0] * bass, S.cityGlow[1] * gk + SK.add[1] * bass, S.cityGlow[2] * gk + SK.add[2] * bass]);
     SH.sky.setUniform('uFlash', S.flash); SH.sky.setUniform('uFlashX', S.flashX); SH.sky.setUniform('uDawn', S.dawn); SH.sky.setUniform('uCloud', S.cloud); SH.sky.setUniform('uSun', S.sun);
     p.model(sky);
 
@@ -529,7 +534,7 @@ AG.Renderer = (function () {
     c.setUniform('tScene', sceneFB); c.setUniform('tBloom', bA); c.setUniform('tBloom2', cB);
     c.setUniform('uRes', [p.width, p.height]); c.setUniform('uTime', rt);
     // bass → city glow: the bloom grows with the music (0.6 exactly when the drive is 0)
-    c.setUniform('uBloom', D.noBloom ? 0 : 0.6 * (1 + 0.9 * AG.Reactivity.drive.bass)); c.setUniform('uExposure', D.exp !== undefined ? D.exp : S.exposure);
+    c.setUniform('uBloom', D.noBloom ? 0 : 0.6 * (1 + (AG.Reactivity.sky || AG.CONFIG.reactivity.sky).bloom * AG.Reactivity.drive.bass)); c.setUniform('uExposure', D.exp !== undefined ? D.exp : S.exposure);
     c.setUniform('uGlitch', S.glitch); c.setUniform('uFade', S.fade);
     c.setUniform('uLetterbox', R.letterbox); c.setUniform('uGrain', 0.035); c.setUniform('uVignette', 0.55);
     c.setUniform('uLens', tier.lens ? (cam.close || 0) * S.rain * 0.35 : 0);

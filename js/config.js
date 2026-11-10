@@ -41,7 +41,35 @@ AG.CONFIG = {
     outRelease: 5,
     bass:   { attack: 22, release: 6,  floor: 0.55, ceil: 0.95, span: 0.10 },
     mid:    { attack: 18, release: 7,  floor: 0.10, ceil: 0.70, span: 0.08 },
-    treble: { attack: 30, release: 10, floor: 0.01, ceil: 0.25, span: 0.04 }
+    treble: { attack: 30, release: 10, floor: 0.01, ceil: 0.25, span: 0.04 },
+    /* how bass drives the sky & bloom (read by js/render/renderer.js):
+       uCityGlow = cityGlow × (1 + gain × bass) + add × bass
+       uBloom    = 0.6 × (1 + bloom × bass)                              */
+    sky: { gain: 1.2, add: [0.14, 0.05, 0.16], bloom: 0.9 },
+    /* how the drives reach the city shader (read by js/render/renderer.js):
+       bassGlow    building emission × (1 + 0.6 × bassGlow × bass drive)
+       midPulse    scales the mid drive that pulses the windows
+       sparkAccent musical accents (beat rise of bass/mid) → city sparkles;
+                   the sparkles use max(treble drive, sparkAccent × accent)
+       sparkNear   sparkle strength on big, close windows (1 = full; lower
+                   keeps the sparks in the distant city instead of flaring)
+       Defaults leave stage 05 exactly as before (no bass glow, mid × 1,
+       sparkles from treble only).                                       */
+    city: { bassGlow: 0, midPulse: 1, sparkAccent: 0, sparkNear: 1 },
+    accent: { attack: 30, release: 6 },
+    /* Per-stage overrides. Only the keys listed here differ from the values
+       above; any stage not listed (05 AFTERGLOW) uses the values above
+       exactly. On a stage change the active values ease to the new stage's
+       over `stageBlend` seconds (p.lerp), so brightness never jumps.     */
+    stageBlend: 1.2,
+    stages: {
+      // 01–03: a calm, atmospheric response from bass (sky) and mids (windows)
+      NUMBNESS:  { levelWeight: 0.7, outRelease: 3.5, mid: { floor: 0.07, ceil: 0.55 }, sky: { add: [0.196, 0.07, 0.224], bloom: 0.85 }, city: { bassGlow: 0.6, midPulse: 1.4, sparkAccent: 0.4, sparkNear: 0.25 } },
+      FRACTURE:  { levelWeight: 0.7, outRelease: 3.5, mid: { floor: 0.07, ceil: 0.55 }, sky: { add: [0.196, 0.07, 0.224], bloom: 0.85 }, city: { bassGlow: 0.6, midPulse: 1.4, sparkAccent: 0.4, sparkNear: 0.25 } },
+      AWAKENING: { levelWeight: 0.7, outRelease: 3.5, mid: { floor: 0.07, ceil: 0.55 }, sky: { add: [0.196, 0.07, 0.224], bloom: 0.85 }, city: { bassGlow: 0.6, midPulse: 1.4, sparkAccent: 0.4, sparkNear: 0.25 } },
+      // 04: the sky pulses on the musical beats (less steady level, more beat)
+      RECLAIMING_SELF: { levelWeight: 0.45, beatWeight: 0.85, baseline: 0.8, outRelease: 7, bass: { span: 0.08 }, sky: { gain: 1.8 }, city: { bassGlow: 0.7, midPulse: 1.3, sparkAccent: 0.5, sparkNear: 0.25 } }
+    }
   },
 
   /* ---------- The five emotional states (finite-state machine) ----------

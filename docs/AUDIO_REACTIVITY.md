@@ -68,6 +68,84 @@ OFF fades the shader drives to 0 over about a second. The music values handed to
 story (heartbeat and equaliser signs) ease to the story's neutral 0.2 before switching to
 its "no music" path, so nothing snaps.
 
+## Per-stage settings
+
+`AG.CONFIG.reactivity.stages` overrides a few values per stage. `AG.CONFIG.reactivity.sky`
+holds the bass → sky/bloom strengths that `renderer.js` reads:
+
+```
+uCityGlow = cityGlow × (1 + sky.gain × bass) + sky.add × bass
+uBloom    = 0.6 × (1 + sky.bloom × bass)
+```
+
+| | 01–03 (calm) | 04 (sky pulse) | 05 |
+|---|---|---|---|
+| `levelWeight` | 0.7 | 0.45 | 0.6 (global) |
+| `beatWeight` | 0.6 | 0.85 | 0.6 |
+| `outRelease` | 3.5 (slower fall) | 7 (faster fall) | 5 |
+| `baseline` | 0.5 | 0.8 | 0.5 |
+| `mid.floor` / `mid.ceil` | 0.07 / 0.55 | 0.10 / 0.70 | 0.10 / 0.70 |
+| `bass.span` | 0.10 | 0.08 | 0.10 |
+| `sky.gain` | 1.2 | 1.8 | 1.2 |
+| `sky.add` | [0.196, 0.07, 0.224] (×1.4) | [0.14, 0.05, 0.16] | [0.14, 0.05, 0.16] |
+| `sky.bloom` | 0.85 | 0.9 | 0.9 |
+
+- Stage 05 has no overrides and uses the global values exactly, as before.
+- On a stage change, the values in use ease to the new stage's over `stageBlend`
+  (1.2 s, `p.lerp`), so brightness never jumps.
+- The debug header shows the current stage, level×, beat×, sky gain, add and bloom.
+
+Safe ranges for further tuning:
+- 01–03: `levelWeight` 0.7–0.85, `outRelease` 2.5–3.5, `mid.floor` 0.04–0.08,
+  `mid.ceil` 0.45–0.55, `sky.add` ×1.4–1.8, `sky.bloom` 0.7–0.9.
+- 04: `levelWeight` 0.35–0.45, `beatWeight` 0.85–1.0, `bass.span` 0.07–0.08,
+  `baseline` 0.8–1.0, `outRelease` 7–9, `sky.gain` 1.8–2.2.
+
+Measured with the generative score (6 s means; ON vs OFF brightness at an ordinary moment):
+
+| Stage | bass drive | mid drive | ON vs OFF brightness |
+|---|---|---|---|
+| 01 | 0.59 (was 0.48) | 0.43 (was 0.22) | +5.4% |
+| 02 | 0.58 | 0.68 | +6.5% |
+| 03 | 0.53 (was 0.46) | 0.72 (was 0.46) | +5.3% |
+| 04 | 0.61, range 0.22–1.00, ~7 pulses / 6 s | 0.32–0.6 | +9.3% |
+| 05 | 0.68 (unchanged settings) | 0.60 | (unchanged) |
+
+## City response per stage (`AG.CONFIG.reactivity.city`)
+
+`renderer.js` passes these to the existing `js/shaders/city.glsl.js`; no new shader file:
+
+| Uniform | Value | Effect in `city.glsl.js` |
+|---|---|---|
+| `uAudioBass` | bass drive × `bassGlow` | `emit *= 1 + 0.6 × uAudioBass`: the buildings' own light (windows, light veins, seams) |
+| `uAudioMid` | mid drive × `midPulse` | lit windows pulse (`windows()`) |
+| `uAudioTreble` | max(treble drive, accent × `sparkAccent`) | sparkles on window glass, near and far |
+| `uSparkNear` | `sparkNear` | sparkle strength on big, close windows (lower = sparks stay in the distant city) |
+
+- **Accent** (`AG.Reactivity.accent`): the stronger beat rise of bass or mid, with a quick
+  rise and slower fall (`accent.attack` / `accent.release`, `p.lerp`).
+- The score has almost no treble before stage 05, so in 01–04 the sparkles come from
+  these accents.
+
+| | 01–03 | 04 | 05 (default) |
+|---|---|---|---|
+| `bassGlow` | 0.6 | 0.7 | 0 |
+| `midPulse` | 1.4 | 1.3 | 1 |
+| `sparkAccent` | 0.4 | 0.5 | 0 |
+| `sparkNear` | 0.25 | 0.25 | 1 |
+
+Stage 05 uses the defaults, so its picture is exactly as before. Safe ranges:
+`bassGlow` 0.4–0.9, `midPulse` 1.1–1.6, `sparkAccent` 0.3–0.6, `sparkNear` 0.15–0.5.
+
+Measured ON vs OFF, comparing two consecutive frames of the same scene (generative score):
+
+| Moment | Stage 02 | Stage 03 | Stage 04 |
+|---|---|---|---|
+| Typical (no accent) | +8.5% | +4.9% | +7.8% |
+| Strong accent (brief) | | | +21% |
+
+On an accent in stage 01, short white sparks light up across the dark towers.
+
 ## Testing
 
 1. Serve the folder (for example `python3 -m http.server 8000`) and open

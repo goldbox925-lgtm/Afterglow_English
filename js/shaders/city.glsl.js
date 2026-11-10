@@ -2,8 +2,10 @@
    City shader — all opaque architecture in a single program.
    Vertex stage:  fragments float / reassemble, voice-driven tremor,
                   glitch slicing of distant towers.
-   Audio reactivity (GLSL side): uAudioMid pulses lit windows, uAudioTreble
-   adds sparkles; both come from js/audio/reactivity.js and are 0 when OFF.
+   Audio reactivity (GLSL side): uAudioBass brightens the buildings' own
+   light, uAudioMid pulses lit windows, uAudioTreble (treble or musical
+   accents) adds sparkles; all come from js/audio/reactivity.js via
+   renderer.js and are 0 when OFF.
    Fragment stage: procedural windows (one by one, spreading outward
                   from her), wet glass, stained concrete, her rain-
                   rippled rooftop, streets with light veins and traffic.
@@ -85,7 +87,9 @@ uniform float uEmitScale;   // debug / global emission trim
 uniform float uDamage;      // global severity of the physical damage (1 = devastated)
 uniform float uEmber;       // embers still glowing in the wounds
 uniform float uAudioMid;    // soundtrack mid band, smoothed (0 when AUDIO REACTIVITY is OFF)
-uniform float uAudioTreble; // soundtrack treble band, smoothed (0 when OFF)
+uniform float uAudioTreble; // sparkle drive: treble band or musical accents (0 when OFF)
+uniform float uAudioBass;   // bass drive × per-stage bassGlow (0 when OFF and in stage 05)
+uniform float uSparkNear;   // sparkle strength on big close windows (1 = full, as in stage 05)
 float gL = 0.0;             // restoration by the viewer at this fragment (field)
 vec3  gSCol = vec3(1.0);    // that area's colour
 
@@ -201,6 +205,8 @@ vec3 windows(vec3 wp, vec3 N, float bh, float mat, float distN, out float glassM
   // treble: brief sparkles on the glass, re-picked ~14 times a second
   float spT = floor(uTime * 14.0);
   float spk = step(1.0 - 0.07 * uAudioTreble, hash12(cell * 1.73 + vec2(bh * 41.0, spT)));
+  // close-up windows (small fwidth) get uSparkNear; distant ones full strength (1.0 → unchanged)
+  spk *= mix(uSparkNear, 1.0, smoothstep(0.05, 0.3, aa));
   em += vec3(0.85, 0.95, 1.0) * spk * uAudioTreble * 3.5;
   // --- far away: average instead of aliasing ---
   float far = smoothstep(0.25, 0.8, aa);
@@ -402,6 +408,8 @@ void main(){
   float dc = length(wp - uCharPos);
   float near = exp(-dc / 22.0) * uCharGlow;
   emit *= 1.0 + near * 2.2;
+  // audio reactivity: bass lifts the buildings' own light (windows, veins, seams); 0 → unchanged
+  emit *= 1.0 + 0.6 * uAudioBass;
   col += vec3(1.0, 0.45, 0.85) * exp(-dc / 7.0) * uCharGlow * 0.35 * (0.4 + 0.6 * pow(1.0 - max(dot(N, V), 0.0), 2.0));
   col += emit * uEmitScale;
   col = applyFog(col, wp);

@@ -38,6 +38,11 @@
    own "no music" path), so the heartbeat (uPulse) and equaliser signs
    (uBands) settle smoothly into the original, non-reactive look.
 
+   PER-STAGE SETTINGS: AG.CONFIG.reactivity.stages overrides some values
+   for stages 01–03 (calm sky + mid-sensitive windows) and 04 (sky pulses
+   on beats). The values in use ease between stages with p.lerp over
+   `stageBlend` seconds; 05 uses the global values unchanged.
+
    TEMPORARY debug view: press B, or open the page with ?audiodebug=1.
    ===================================================================== */
 window.AG = window.AG || {};
@@ -54,15 +59,48 @@ AG.Reactivity = (function () {
     beat: { bass: 0, mid: 0, treble: 0 },       // transient part: rise above the baseline
     out: { bass: 0, mid: 0, treble: 0 },        // combined & smoothed, before the ON/OFF fade
     drive: { bass: 0, mid: 0, treble: 0 },      // final visual drive sent to the shaders (0..1)
-    amount: 1                                   // ON/OFF cross-fade (0..1)
+    accent: 0,                                  // musical accents: smoothed beat rise of bass/mid (0..1, × ON/OFF fade)
+    amount: 1,                                  // ON/OFF cross-fade (0..1)
+    sky: null                                   // bass → sky/bloom strengths in use (for renderer.js)
   };
   let debugEl = null, debugOn = false;
 
+  /* ---------- per-stage settings (AG.CONFIG.reactivity.stages) ----------
+     The values in use (`active`) ease toward the current stage's values:
+     the global settings with that stage's overrides on top. A stage with
+     no overrides (05 AFTERGLOW) settles exactly on the global settings.  */
+  let active = null, activeStage = null;
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  function targetFor(stage) {
+    const RC = C.reactivity, t = clone(RC);
+    delete t.stages; delete t.stageBlend;
+    const ov = (RC.stages && RC.stages[stage]) || {};
+    Object.keys(ov).forEach((k) => {
+      const v = ov[k];
+      if (v && typeof v === 'object' && !Array.isArray(v)) Object.assign(t[k], clone(v)); else t[k] = clone(v);
+    });
+    return t;
+  }
+  // p5.js: ease every number (and array element) of `cur` toward `tgt`
+  function blend(p, cur, tgt, k) {
+    Object.keys(tgt).forEach((key) => {
+      const a = cur[key], b = tgt[key];
+      if (typeof b === 'number') { const v = p.lerp(a, b, k); cur[key] = Math.abs(v - b) < 1e-5 ? b : v; }
+      else if (Array.isArray(b)) b.forEach((x, i) => { const v = p.lerp(a[i], x, k); a[i] = Math.abs(v - x) < 1e-5 ? x : v; });
+      else if (b && typeof b === 'object') blend(p, a, b, k);
+    });
+  }
+
   /* called once per frame from sketch.js draw() */
   function update(p, bands, raw) {
-    const RC = C.reactivity;
     // p5.js: frame time in ms → seconds, clamped so a stalled tab doesn't jump
     const dt = p.constrain(p.deltaTime / 1000, 0, 0.1);
+    const stage = AG.FSM.state, tgt = targetFor(stage);
+    if (!active) active = tgt;                                   // first frame: start on the stage's values
+    else blend(p, active, tgt, 1 - Math.exp(-dt / C.reactivity.stageBlend));
+    activeStage = stage;
+    const RC = active;
+    R.sky = active.sky;
     BANDS.forEach((b) => { R.raw[b] = raw ? raw[b] : 0; });
     const kBase = 1 - Math.exp(-dt * RC.baseline);
     // p5.js: ease the ON/OFF switch so the image never snaps
@@ -86,9 +124,14 @@ AG.Reactivity = (function () {
       R.out[b] = p.lerp(R.out[b], target, kOut);
       R.drive[b] = R.out[b] * R.amount;
     });
+    // musical accents (drum hits, swells): the stronger beat of bass/mid, quick rise, slower fall (p5 lerp)
+    const acc = Math.max(R.beat.bass, R.beat.mid);
+    R.accentRaw = p.lerp(R.accentRaw || 0, acc, 1 - Math.exp(-dt * (acc > (R.accentRaw || 0) ? RC.accent.attack : RC.accent.release)));
+    R.accent = R.accentRaw * R.amount;
+    R.city = RC.city;
     if (debugOn) drawDebug();
     const snap = (o) => Object.assign({}, o);
-    window.__AG_AUDIO = { enabled: R.enabled, amount: +R.amount.toFixed(3), raw: snap(R.raw), smooth: snap(R.smooth), base: snap(R.base), level: snap(R.level), beat: snap(R.beat), drive: snap(R.drive) };
+    window.__AG_AUDIO = { enabled: R.enabled, amount: +R.amount.toFixed(3), stage: activeStage, raw: snap(R.raw), smooth: snap(R.smooth), base: snap(R.base), level: snap(R.level), beat: snap(R.beat), drive: snap(R.drive), accent: +R.accent.toFixed(3), city: clone(R.city), sky: clone(R.sky), weights: { level: RC.levelWeight, beat: RC.beatWeight, release: RC.outRelease } };
     // the story's own music input (heartbeat + equaliser signs): unchanged when ON,
     // eased toward its neutral value (0.2) while fading OFF, then null = original look
     if (!bands || R.amount < 0.002) return R.enabled ? bands : null;
@@ -121,7 +164,7 @@ AG.Reactivity = (function () {
   function drawDebug() {
     const A = AG.Audio;
     debugEl.querySelector('.ad-head').textContent =
-      `AUDIO DEBUG · reactivity ${R.enabled ? 'ON' : 'OFF'} · source ${A.mode} · ${AG.FSM.playing ? 'playing' : 'paused'}`;
+      `AUDIO DEBUG · reactivity ${R.enabled ? 'ON' : 'OFF'} · source ${A.mode} · ${AG.FSM.playing ? 'playing' : 'paused'} · stage ${activeStage} · level×${active.levelWeight.toFixed(2)} beat×${active.beatWeight.toFixed(2)} sky gain ${active.sky.gain.toFixed(2)} add ${active.sky.add[0].toFixed(2)} bloom ${active.sky.bloom.toFixed(2)} · city bassGlow ${active.city.bassGlow.toFixed(2)} midPulse ${active.city.midPulse.toFixed(2)} sparkAccent ${active.city.sparkAccent.toFixed(2)} · accent ${R.accent.toFixed(2)}`;
     BANDS.forEach((b) => {
       const row = debugEl.querySelector(`[data-b="${b}"]`);
       row.querySelector('.raw').style.width = (R.raw[b] * 100).toFixed(1) + '%';
