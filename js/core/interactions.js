@@ -21,9 +21,13 @@ AG.Interactions = (function () {
   const I = {
     vantage: null, beacon: null, fragile: [], nodes: [], links: [], hintLevel: 0, hint: null,
     progress: 0, hover: -1, dragging: false, dragFrom: -1, dragTo: null, beaconScreen: null,
-    stabilised: 0, connections: 0, awakeningConnections: 0, cityLinks: 0, selectedBuilding: -1
+    stabilised: 0, connections: 0, awakeningConnections: 0, cityLinks: 0, selectedBuilding: -1,
+    // what each stage actually requires in THIS city: the configured amount, or fewer if
+    // the generated city provides fewer targets (so a stage can never become impossible)
+    need: { fragile: IC.fragile.needed, awakening: NC.awakeningNeeded, links: NC.reclaimingLinks }
   };
   let info = null, R = null, lastAction = 0, holdIdx = -1, holdT = 0, baseNodes = [];
+  let shaftPool = [];   // buildings with facades (stage 03 top-up candidates)
 
   /* ---------------- geometry helpers ---------------- */
   function faceToward(b, from, sh) {
@@ -91,6 +95,27 @@ AG.Interactions = (function () {
       }
       if (best) { used.add(best.idx); I.fragile.push(Object.assign(best, { phase: rng.next() * 100, rate: rng.range(0.7, 1.4), stable: false, stableAt: 0, hold: 0 })); }
     }
+    // some cities leave a sector empty: fill up to the required number with a wider search
+    // (80–600 m, ±80°), so stage 02 always has enough windows. Cities that already had
+    // enough skip this, so their targets are unchanged.
+    if (I.fragile.length < IC.fragile.needed) {
+      const extra = [];
+      for (const { b, idx } of shafts) {
+        if (used.has(idx)) continue;
+        const c = [b.cx, 0, b.cz], d = distOf(c), a = angOf(c) * 57.3;
+        if (d < 80 || d > 600 || Math.abs(a) > 80) continue;
+        extra.push({ b, idx, sc: Math.abs(d - 240) * 0.2 + Math.abs(a) * 0.5 });
+      }
+      extra.sort((x, y) => x.sc - y.sc);
+      for (const o of extra) {
+        if (I.fragile.length >= IC.fragile.needed) break;
+        const w = visibleWindow(o.b, rng, [0.85, 0.65, 0.45]);
+        if (!w || I.fragile.some((f) => V.len(V.sub(f.pos, w.pos)) < 40)) continue;
+        used.add(o.idx);
+        I.fragile.push(Object.assign(w, { idx: o.idx, phase: rng.next() * 100, rate: rng.range(0.7, 1.4), stable: false, stableAt: 0, hold: 0 }));
+      }
+    }
+    I.need.fragile = Math.min(IC.fragile.needed, I.fragile.length);
     // 03/04 the network: windows spread over the city in front of her, ≥ 70 m apart
     const pool = [];
     for (const { b, idx } of shafts) {
@@ -108,6 +133,7 @@ AG.Interactions = (function () {
       nodes.push(Object.assign(w, { idx: o.idx, lit: false, litAt: -1e9, seed: false, col: null }));
     }
     baseNodes = nodes;
+    shaftPool = shafts;
     I.nodes = nodes.slice();
     resetState();
   }
@@ -131,6 +157,55 @@ AG.Interactions = (function () {
       });
     }
     I.nodes = I.nodes.filter((n, i) => reach.has(i));
+    topUpReachable();
+  }
+
+  /* Stage 03 always asks for exactly NC.awakeningNeeded (5) buildings. If fewer dark
+     buildings are reachable, add the closest suitable EXISTING buildings whose visible
+     window lies within reach of the network, one at a time (each one extends the reach).
+     Deterministic: a fixed candidate order and the interaction module's own seeded
+     sequence, so the city (geometry and its random sequence) is untouched.              */
+  function topUpReachable() {
+    let missing = NC.awakeningNeeded - I.nodes.filter((n) => !n.seed).length;
+    if (missing <= 0) return;
+    const rng = U.rng((seedOf() ^ 0x3a7f1) >>> 0);
+    // buildings that already carry a target (incl. the pulse and the steadied windows) are skipped;
+    // an unsteadied fragile window is gone after stage 02, so its building may be used
+    const taken = new Set();
+    I.nodes.forEach((n) => { if (n.idx !== undefined) taken.add(n.idx); });
+    const range = NC.linkRange * 0.95;
+    for (let guard = 0; missing > 0 && guard < 40; guard++) {
+      // candidates: unused buildings in front of her whose footprint is near the network
+      const cands = [];
+      for (const { b, idx } of shaftPool) {
+        if (taken.has(idx)) continue;
+        const c = [b.cx, 0, b.cz];
+        if (distOf(c) < 60 || distOf(c) > 1000 || Math.abs(angOf(c)) * 57.3 > 110) continue;
+        let near = 1e9;
+        for (const n of I.nodes) near = Math.min(near, Math.hypot(n.pos[0] - b.cx, n.pos[2] - b.cz));
+        if (near <= range) cands.push({ b, idx, near });
+      }
+      cands.sort((x, y) => x.near - y.near || x.idx - y.idx);
+      let added = false;
+      for (const o of cands) {
+        taken.add(o.idx);
+        // highest window on this facade that is visible from her roof AND within reach
+        // (a tall tower's top window can be out of reach even when the tower is close)
+        let w = null;
+        for (const yk of [0.9, 0.75, 0.6, 0.45, 0.3, 0.15]) {
+          const c = windowOn(o.b, I.vantage, rng, yk);
+          if (!visibleFrom(I.vantage, c.pos, c.n, o.b)) continue;
+          if (I.nodes.some((n) => V.len(V.sub(n.pos, c.pos)) < 40)) continue;          // keep targets apart
+          if (!I.nodes.some((n) => V.len(V.sub(n.pos, c.pos)) <= range)) continue;     // must be reachable
+          c.box = o.b; w = c; break;
+        }
+        if (!w) continue;
+        I.nodes.push(Object.assign(w, { idx: o.idx, lit: false, litAt: -1e9, seed: false, col: null, topUp: true }));
+        missing--; added = true;
+        break;
+      }
+      if (!added) break;
+    }
   }
 
   function resetState() {
@@ -188,7 +263,7 @@ AG.Interactions = (function () {
     R.add({ x: f.pos[0], z: f.pos[2], y: f.pos[1], R: IC.fragile.radius, dur: 1.6, strength: 0.5, col, t0: at, auto, kind: 'fragile' });
     if (!auto) U.emit('stabilise', { n: I.stabilised, needed: IC.fragile.needed, pos: f.pos });
     lastAction = at;
-    if (I.stabilised >= IC.fragile.needed && !auto) AG.FSM.advance('FRACTURE');
+    if (I.stabilised >= I.need.fragile && !auto) AG.FSM.advance('FRACTURE');
   }
 
   /* ---------------- 03/04: the network ---------------- */
@@ -248,18 +323,18 @@ AG.Interactions = (function () {
   }
   function checkProgress() {
     const st = AG.FSM.state, P = (I.progress = progressNow());
-    if (st === 'AWAKENING' && I.awakeningConnections >= NC.awakeningNeeded) AG.FSM.advance('AWAKENING');
+    if (st === 'AWAKENING' && I.awakeningConnections >= I.need.awakening) AG.FSM.advance('AWAKENING');
   }
 
   /* default choices when a presentation jump skips a state */
   function autoComplete(state) {
     const at = AG.FSM.animTime;
     if (state === 'NUMBNESS') findPulse(at, true);
-    else if (state === 'FRACTURE') { I.fragile.forEach((f) => { if (I.stabilised < IC.fragile.needed) stabilise(f, at, true); }); seedNetwork(at); }
+    else if (state === 'FRACTURE') { I.fragile.forEach((f) => { if (I.stabilised < I.need.fragile) stabilise(f, at, true); }); seedNetwork(at); }
     else if (state === 'AWAKENING') {
       if (!I.nodes.some((n) => n.seed)) seedNetwork(at);
       let guard = 200;
-      while (guard-- > 0 && I.awakeningConnections < NC.awakeningNeeded) {
+      while (guard-- > 0 && I.awakeningConnections < I.need.awakening) {
         const dark = reachableDark(); if (!dark.length) break;
         const j = dark[Math.floor(U.hash(guard * 7.7 + I.connections) * dark.length)];
         let src = I.nodes.findIndex((n) => n.lit && inReach(n, I.nodes[j]));
@@ -300,6 +375,8 @@ AG.Interactions = (function () {
     }
 
     if (st === 'FRACTURE') {
+      // safety net: a city with no fragile windows at all must not trap the story here
+      if (I.need.fragile === 0) { AG.FSM.advance('FRACTURE'); return; }
       I.fragile.forEach((f) => { f.on = fragileOn(f, at); });
       const pick = (x, y) => nearestOnScreen(I.fragile, x, y, cam, IC.fragile.tolerancePx, (f) => !f.stable);
       if (input.px !== undefined) I.fragHover = pick(input.px, input.py);

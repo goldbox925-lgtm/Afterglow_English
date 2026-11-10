@@ -154,8 +154,8 @@ AG.UI = (function () {
     panel.classList.toggle('show', !!pr);
     panel.classList.toggle('compact', !!pr && st === 'AFTERGLOW' && (performance.now() - stateShownAt) > 7000);
     let done = 0, total = 0;
-    if (st === 'FRACTURE') { done = IA.stabilised; total = C.interaction.fragile.needed; }
-    else if (st === 'AWAKENING') { done = IA.awakeningConnections; total = C.interaction.network.awakeningNeeded; }
+    if (st === 'FRACTURE') { done = IA.stabilised; total = IA.need.fragile; }
+    else if (st === 'AWAKENING') { done = IA.awakeningConnections; total = IA.need.awakening; }
     else if (st === 'RECLAIMING_SELF') { done = IA.cityLinks; total = C.interaction.network.reclaimingLinks; }
     const countHTML = total ? Array.from({ length: total }, (_, i) => `<i class="${i < done ? 'on' : ''}"></i>`).join('') : '';
     if ($('stageCount').innerHTML !== countHTML) $('stageCount').innerHTML = countHTML;

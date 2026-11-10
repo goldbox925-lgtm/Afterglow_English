@@ -28,13 +28,17 @@ button { font: inherit; color: inherit; }
 .intro-inner { padding: 24px; max-width: 760px; }
 .eyebrow { letter-spacing: 0.45em; text-transform: uppercase; font-size: 11px; color: var(--dim); margin: 0 0 18px; }
 .title {
-  position: relative; margin: 0; font-weight: 200; letter-spacing: 0.32em; margin-right: -0.32em;
+  /* centring: the title is wider than .intro-inner (max 760px) on large screens, so it
+     spans the full viewport width instead (margins of 50% − 50vw); padding-left balances
+     the letter-spacing that follows the last letter; flex centring keeps the word centred
+     even when its line (with that trailing spacing) is a little wider than a phone screen */
+  position: relative; margin: 0 calc(50% - 50vw); padding-left: 0.32em; display: flex; justify-content: center; font-weight: 200; letter-spacing: 0.32em;
   font-size: clamp(44px, 10vw, 128px); line-height: 1;
   color: #fff; text-shadow: 0 0 18px rgba(255, 42, 158, 0.55), 0 0 60px rgba(34, 232, 255, 0.25);
   animation: hum 6s ease-in-out infinite;
 }
 .title::after {
-  content: attr(data-text); position: absolute; inset: 0; color: var(--cyan); mix-blend-mode: screen; opacity: 0.35;
+  content: attr(data-text); position: absolute; inset: 0; display: flex; justify-content: center; padding-left: 0.32em; color: var(--cyan); mix-blend-mode: screen; opacity: 0.35;
   clip-path: inset(0 0 62% 0); transform: translateX(2px); animation: tear 7s steps(1) infinite;
 }
 @keyframes hum { 0%, 100% { opacity: 1; } 47% { opacity: 1; } 48% { opacity: 0.55; } 49% { opacity: 1; } 71% { opacity: 0.8; } 72% { opacity: 1; } }

@@ -7,6 +7,27 @@
         RECLAIMING_SELF ──(make 5 city links)────► AFTERGLOW
         AFTERGLOW: FREE_FLIGHT ⇄ ASCENSION (hold ↑)  ──(cross the light)──► finale
 
+   Each state: entry → interaction → completion → transition
+   (interaction code: js/core/interactions.js; full table: docs/STATE_FLOW.md)
+     01 NUMBNESS   entry: Begin / replay; opening cinematic ('intro', 6.4 s)
+                   do: look around, click the one pulsing window (or Enter when centred)
+                   done: findPulse() → advance('NUMBNESS')
+     02 FRACTURE   entry: cinematic 'fracture' (3.2 s)
+                   do: click flickering windows to steady them
+                   done: stabilised ≥ need.fragile (4) → advance('FRACTURE')
+     03 AWAKENING  entry: network seeded from the pulse + steadied windows
+                   do: click dark buildings within reach of a lit one
+                   done: awakeningConnections ≥ need.awakening (5) → advance('AWAKENING')
+     04 RECLAIMING entry: cinematic 'stand' (8.4 s)
+                   do: drag between / click two lit buildings to link them
+                   done: cityLinks ≥ need.links (5) → advance('RECLAIMING_SELF')
+     05 AFTERGLOW  entry: cinematic 'liftoff' (4.8 s), flight reset
+                   do: steer; hold ↑ to ascend (mode ASCENSION)
+                   done: altitude + hold → Flight.finale → end card → replay
+   Stage 03 always needs exactly 5: if fewer dark buildings are reachable,
+   interactions.js adds existing buildings within reach (deterministic).
+   Stage 02's `need` is capped at the windows found (after a wider search).
+
    States change ONLY through AG.FSM.advance(), which the interaction
    modules call when the viewer completes something meaningful. Time is
    never used to move the story: `stateTime` (seconds in the current
