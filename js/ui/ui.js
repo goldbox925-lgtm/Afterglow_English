@@ -19,6 +19,50 @@ AG.UI = (function () {
     help: '<svg viewBox="0 0 24 24"><path d="M11 18h2v-2h-2zm1-16a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14a4 4 0 0 0-4 4h2a2 2 0 1 1 4 0c0 2-3 1.8-3 5h2c0-2.3 3-2.5 3-5a4 4 0 0 0-4-4z"/></svg>'
   };
 
+  /* ---------- stage 05 fragments: compact HUD + collection message ---------- */
+  const FLOWER = '<svg viewBox="-12 -12 24 24" aria-hidden="true"><ellipse cx="0" cy="-5.4" rx="3.3" ry="5.4"/><ellipse cx="5.4" cy="0" rx="5.4" ry="3.3"/><ellipse cx="0" cy="5.4" rx="3.3" ry="5.4"/><ellipse cx="-5.4" cy="0" rx="5.4" ry="3.3"/></svg>';
+  const rgb = (c) => `rgb(${c.map((v) => Math.round(v * 255)).join(',')})`;
+  let fragBuilt = false, fragKey = '', fragMsgTimer = null;
+  function updateFragHud(st) {
+    const FR = AG.Fragments, hud = $('fragHud'), body = document.body;
+    const show = !!(FR && FR.ready) && st === 'AFTERGLOW' && body.classList.contains('entered') && !body.classList.contains('ended') && !AG.FSM.cinematic;
+    hud.classList.toggle('show', show);
+    if (!FR || !FR.ready) return;
+    if (!fragBuilt) {
+      $('fragIcons').innerHTML = FR.list.map((f, i) => `<i class="fh-ico" data-i="${i}" title="${f.id}" style="--c:${rgb(f.col)}">${FLOWER}</i>`).join('');
+      fragBuilt = true;
+    }
+    const active = FR.list.findIndex((f) => !f.collected);
+    const key = FR.collected + ':' + active;
+    if (key === fragKey) return;
+    fragKey = key;
+    document.querySelectorAll('#fragIcons .fh-ico').forEach((el, i) => {
+      el.classList.toggle('done', !!FR.list[i] && FR.list[i].collected);
+      el.classList.toggle('active', i === active);
+    });
+    $('fragCount').textContent = `${FR.collected} / ${FR.list.length}`;
+    const cur = FR.list[active >= 0 ? active : FR.list.length - 1];
+    $('fragName').textContent = cur.id;
+    $('fragDesc').textContent = cur.desc;
+    $('fragCur').style.setProperty('--fc', rgb(cur.col));
+  }
+  function showFragMsg(e) {
+    const FR = AG.Fragments, i = FR.list.findIndex((f) => f.id === e.id), f = FR.list[i];
+    if (!f) return;
+    $('fragMsgKey').textContent = `${f.id} · ${e.n}/${FR.list.length}`;
+    $('fragMsgText').textContent = f.found;
+    const m = $('fragMsg');
+    m.style.setProperty('--fc', rgb(f.col));
+    fragKey = ''; updateFragHud(AG.FSM.state);                  // HUD first (its height can change) ...
+    const hudTop = $('fragHud').getBoundingClientRect().top;      // ... then sit 8 px above it
+    if (hudTop > 0) m.style.bottom = Math.round(window.innerHeight - hudTop + 8) + 'px';
+    m.classList.remove('show'); void m.offsetWidth; m.classList.add('show');
+    clearTimeout(fragMsgTimer); fragMsgTimer = setTimeout(() => m.classList.remove('show'), 2600);
+    const ico = document.querySelector(`#fragIcons .fh-ico[data-i="${i}"]`);
+    if (ico) { ico.classList.remove('pop'); void ico.offsetWidth; ico.classList.add('pop'); }
+  }
+  function hideFragMsg() { clearTimeout(fragMsgTimer); $('fragMsg').classList.remove('show'); fragKey = ''; }
+
   function init(handlers) {
     $('btnPlay').innerHTML = ICON.play;
     $('btnReplay').innerHTML = ICON.replay;
@@ -78,8 +122,9 @@ AG.UI = (function () {
 
     U.on('playstate', (pl) => { $('btnPlay').innerHTML = pl ? ICON.pause : ICON.play; $('btnPlay').title = pl ? 'Pause (Space)' : 'Resume (Space)'; document.body.classList.toggle('paused', !pl); });
     U.on('finale', () => { setTimeout(() => { if (AG.Flight.finale) { document.body.classList.add('ended'); $('endCard').classList.add('show'); } }, 13000); });
-    U.on('reset', () => { $('endCard').classList.remove('show'); document.body.classList.remove('ended'); });
-    U.on('replay', () => { $('endCard').classList.remove('show'); document.body.classList.remove('ended'); });
+    U.on('reset', () => { $('endCard').classList.remove('show'); document.body.classList.remove('ended'); hideFragMsg(); });
+    U.on('fragment', showFragMsg);
+    U.on('replay', () => { $('endCard').classList.remove('show'); document.body.classList.remove('ended'); hideFragMsg(); });
     U.on('quality', (q) => { $('tierNow').textContent = q; });
     U.on('audioMode', (m) => { $('audioMode').textContent = m === 'mp3' ? 'music: MP3' : 'music: generative'; });
 
@@ -167,6 +212,12 @@ AG.UI = (function () {
       else if (b && !b.on) arrow = b;
       else if (!b && IA.beacon) arrow = { behind: true };
     } else if ((st === 'FRACTURE' || st === 'AWAKENING' || st === 'RECLAIMING_SELF') && IA.hint && !F.cinematic) ring = IA.hint;
+    else if (st === 'AFTERGLOW' && !F.cinematic && !AG.Flight.finale && AG.Fragments && AG.Fragments.active()) {
+      // stage 05: the existing edge arrow points to the revealed fragment while it is off screen
+      const fr = AG.Fragments.active(), P = [fr.pos.x, fr.pos.y, fr.pos.z], cam = AG.Camera.state, sp = IA.project(P, cam);
+      if (!sp) { const V = U.v3, right = V.cross(V.norm(V.sub(cam.target, cam.pos)), [0, 1, 0]); arrow = { nx: V.dot(V.sub(P, cam.pos), right) >= 0 ? 1 : -1, ny: 0 }; }
+      else if (!sp.on) arrow = sp;
+    }
     const hr = $('hintRing');
     hr.classList.toggle('show', !!ring);
     if (ring) { hr.style.left = ring.x + 'px'; hr.style.top = ring.y + 'px'; }
@@ -201,6 +252,7 @@ AG.UI = (function () {
         th.classList.add('show');
       }
     } else th.classList.remove('show');
+    updateFragHud(st);
     const tr = $('titleReveal');
     const showT = S.title > 0.02;
     if (showT !== tr.classList.contains('show')) tr.classList.toggle('show', showT);

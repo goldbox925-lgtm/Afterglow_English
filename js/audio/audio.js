@@ -226,6 +226,15 @@ AG.Audio = (function () {
     U.on('cloud', () => { if (!playing) return; if (A.mode === 'generative') AG.Score.accent('cloud'); else swell(4); });
     U.on('finale', () => { if (playing) bell([587.33, 739.99, 880, 1174.66, 1479.98, 1760], 0.07, 10); });
     U.on('tap', (e) => { if (playing) tick(e.near ? 990 : e.far ? 520 : 660); });
+    // stage 05: one short success chime per collected fragment (rising a step with each one).
+    // Effects bus only (not the music, not analysed for audio reactivity). bindEvents() runs
+    // only after the AudioContext was unlocked by the Enter click; if anything fails, stay silent.
+    const chime = [659.25, 739.99, 880, 987.77, 1174.66];
+    U.on('fragment', (e) => {
+      if (!playing || !A.ctx || A.ctx.state !== 'running') return;
+      try { const f = chime[Math.min(e.n, chime.length) - 1]; bell([f, f * 1.5, f * 2], 0.075, 3.2); A.lastChime = { n: e.n, t: A.ctx.currentTime }; }
+      catch (err) { /* audio unavailable: the visual feedback still plays */ }
+    });
   }
   /* an electric snap: a fragile light caught and held */
   function zap() {

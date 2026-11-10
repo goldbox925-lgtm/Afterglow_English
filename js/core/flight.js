@@ -14,9 +14,10 @@
                 Releasing ↑ pauses: the climb eases to a hover and the pose
                 holds. After 4 s without ↑ she returns to free flight; once
                 RELEASE has been passed, the next ↑ resumes from levitation
-                (liberation is not undone). The ending (LIGHT) needs BOTH the
-                light threshold altitude AND sustained ascension (ascT ≥ 18 s)
-                while ↑ is held.
+                (liberation is not undone).
+   FRAGMENTS    five collectibles along her route (js/core/fragments.js).
+                Collecting the fifth enters the light (LIGHT): the existing
+                ending sequence, via enterLight().
 
    Everything is integrated with dt and smoothed (U.damp), so behaviour is
    the same at 30 or 120 fps. Collision avoidance: a probe ahead steers
@@ -50,6 +51,16 @@ AG.Flight = (function () {
     F.ascT = 0; F.released = 99; F.arc = false; F.phase = 'FLIGHT'; F.holding = false;
     trail = []; for (let i = 0; i < 24; i++) trail.push(F.pos.slice());
     upHeld = 0; sinceUp = 99; cloudHit = false;
+    if (AG.Fragments) AG.Fragments.reset();          // every flight starts with all five fragments in place
+  }
+
+  /* the existing ending: enter the light (LIGHT phase, then the 'finale' sequence) */
+  function enterLight() {
+    if (F.finale) return;
+    const prev = F.phase;
+    F.finale = true; F.phase = 'LIGHT';
+    AG.U.emit('ascPhase', { phase: 'LIGHT', prev });
+    AG.U.emit('finale');
   }
 
   const heading = (yaw) => [Math.sin(yaw), 0, -Math.cos(yaw)];
@@ -114,6 +125,9 @@ AG.Flight = (function () {
       F.speed *= 0.97;
     }
     next[1] = Math.max(next[1], FC.minAlt);
+    // ceiling just above the light threshold: the ending now comes from the fifth fragment,
+    // so without it she could rise for ever and lose the fragments below; she hovers here instead
+    if (next[1] > FC.finaleAltitude + 30) { next[1] = FC.finaleAltitude + 30; if (F.vy > 0) F.vy = 0; }
     F.pos = next;
     // ---- body ----
     F.bank = U.damp(F.bank, F.arc ? 0 : U.clamp(-F.yawRate * 0.42, -0.55, 0.55), 4, dt);
@@ -122,8 +136,9 @@ AG.Flight = (function () {
     // ---- modes ----
     AG.FSM.setMode(F.arc ? 'ASCENSION' : 'FREE_FLIGHT');
     if (!cloudHit && F.pos[1] > FC.finaleAltitude - 110) { cloudHit = true; AG.U.emit('cloud'); }
-    // the light is entered only by sustained, intentional ascension
-    if (!F.finale && held && F.pos[1] >= FC.finaleAltitude && F.ascT >= FINALE_HOLD) { F.finale = true; F.phase = 'LIGHT'; AG.U.emit('ascPhase', { phase: 'LIGHT', prev: 'ASCENSION' }); AG.U.emit('finale'); }
+    // the light is entered by collecting the fifth fragment (distance check in AG.Fragments)
+    // (this update runs only while she is controllable, so the 15 s reveal timer counts active flight only)
+    if (!F.finale && AG.Fragments && AG.Fragments.update(F.pos, AG.FSM.animTime, dt)) enterLight();
     // ---- trail history ----
     trailClock -= dt;
     if (trailClock <= 0) { trail.unshift(F.pos.slice()); trail.length = 24; trailClock = 0.05; }
@@ -192,5 +207,5 @@ AG.Flight = (function () {
     return best;
   }
 
-  return Object.assign(F, { PHASES, phaseK, build, reset, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading });
+  return Object.assign(F, { PHASES, phaseK, build, reset, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight });
 })();

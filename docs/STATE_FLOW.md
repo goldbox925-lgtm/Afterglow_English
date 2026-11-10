@@ -15,7 +15,7 @@ NUMBNESS ─► FRACTURE ─► AWAKENING ─► RECLAIMING_SELF ─► AFTERGLO
 | 02 | FRACTURE | Cutscene `fracture` (3.2 s). | Click flickering windows to steady them. | `stabilised ≥ need.fragile` (4) | `advance('FRACTURE')` → AWAKENING |
 | 03 | AWAKENING | The light network is seeded from the pulse and the steadied windows. | Click dark buildings (glowing ring) within reach of a lit one. | `awakeningConnections ≥ need.awakening` (5) | `advance('AWAKENING')` → RECLAIMING_SELF |
 | 04 | RECLAIMING_SELF | Cutscene `stand` (8.4 s). | Drag between two lit buildings, or click one and then the other. | `cityLinks ≥ need.links` (5) | `advance('RECLAIMING_SELF')` → AFTERGLOW |
-| 05 | AFTERGLOW | Cutscene `liftoff` (4.8 s); flight reset. | Steer with mouse or ← →, ↓ to descend, hold ↑ to ascend (mode FREE_FLIGHT ⇄ ASCENSION). | Altitude reached while holding ↑ → `Flight.finale` | End card after ~13 s → **Play again** → NUMBNESS |
+| 05 | AFTERGLOW | Cutscene `liftoff` (4.8 s); flight and fragments reset. | Steer with mouse or ← →, ↓ to descend, hold ↑ to ascend (mode FREE_FLIGHT ⇄ ASCENSION). Fly within 20 m of each of the five fragments (`js/core/fragments.js`). | Fifth fragment collected → `Flight.enterLight()` → `Flight.finale` | End card after ~13 s → **Play again** → NUMBNESS |
 
 ## Controls that act on the machine
 
@@ -60,3 +60,55 @@ Measured over 190 generated cities before the fix:
    - Verified on the three named seeds for every possible choice of steadied windows, and on
      150 more cities (962 window choices): at least 5 reachable every time, deterministic,
      no building used twice.
+
+## Stage 05 fragments (Phase 4)
+
+Five collectibles hang along the flight route, rising toward the light:
+
+1. **VOICE** (blue): straight ahead of her roof, about 80–90 m away.
+2. **COURAGE** (pink): at the mouth of the flight canyon. The way there is either direct, or
+   straight on and left along the first open cross street.
+3. **JOY** (gold): further along the canyon.
+4. **FREEDOM** (violet): high above the canyon.
+5. **SELF-LOVE** (warm white): just below the light threshold.
+
+How they work:
+
+- **Sequence:** only the next uncollected fragment exists. It appears after **15 s of active flight**,
+  counted only while she is controllable (not during the lift-off, not while paused, not after the
+  ending). After each collection the 15 s wait starts again. A fragment that hasn't appeared yet
+  can't be collected. Replay resets the timer and the sequence.
+- **Visibility:** the revealed fragment is drawn after the city without depth testing, so buildings
+  never hide it. While it is off screen, the existing hint arrow (also used in stage 01) points to
+  it.
+
+- **Collection:** `p5.Vector.dist(fragment, her position) < 20 m`, each counted once. Collecting
+  one plays a burst: the flower flares and dissolves while a ring expands (network-node shader,
+  kind 5).
+- **Ending:** the fifth calls `AG.Flight.enterLight()`, the existing ending sequence.
+- **Placement:** comes only from the city's geometry (flight avenue, the street in front of her,
+  building boxes) plus a stateless hash. No random generator is used, so the city's random
+  sequence is untouched and each seed gives the same layout.
+  - Every position is checked for free air, and the path from the previous fragment must be
+    open (via the street/canyon corner).
+- **Ceiling:** the flight is capped 30 m above the light threshold, so she can't rise out of
+  reach of the fragments.
+
+### Stage 05 HUD and feedback
+
+**HUD** (`#fragHud`, bottom centre above the control bar; shown only while she can fly in
+stage 05):
+- five flower icons: collected ones filled in their colour, the active one outlined and pulsing,
+  the rest faint;
+- the count `n / 5`;
+- the active fragment's name and description.
+
+**On each collection:**
+- a message just above the HUD for 2.6 s (`NAME · n/5` and "You found your …");
+- the icon pops;
+- 14 sparks fly out from the fragment's position in the city (network shader, kind 6);
+- one chime plays through the existing audio system's effects bus. It is silent if audio isn't
+  running, and not part of the music or the audio reactivity.
+
+Replay hides the message and the count returns to 0. The descriptions come from the
+Collectibles reference sheet; the message pattern comes from the HUD reference recording.

@@ -6,6 +6,9 @@
      kind 2  lit node: a steady light in its colour, slow breathing halo
      kind 3  dark node within reach of a lit one: a faint cold ring
      kind 4  dark node out of reach: a barely visible ember
+     kind 5  stage-05 fragment: a four-petal crystal flower in its colour;
+             kind 5 + 0.9×burst while it is being collected (flare, then gone)
+     kind 6  a spark of the collection burst (6 + 0.9×age): small, sharp, fading
      hover (encoded in S.w ≥ 2): an outer ring, so the target is clear
    LINKS  (8-segment ribbons that arc gently between two windows)
      w of uA = progress 0..1 of the thread travelling A → B; the head is a
@@ -33,6 +36,8 @@ void main(){
   float k = P.w;
   float base = k < 1.5 ? 1.6 : k < 2.5 ? 3.2 : k < 3.5 ? 2.2 : 1.2;
   float size = max(base, dc * (k < 1.5 ? 0.0075 : k < 2.5 ? 0.011 : k < 3.5 ? 0.0085 : 0.004)) * (1.0 + hover * 0.7);
+  if (k > 4.5 && k < 5.95) size = max(7.0, dc * 0.02) * (1.0 + 1.6 * clamp((k - 5.0) / 0.9, 0.0, 1.0));   // fragment (+ burst)
+  if (k > 5.95) size = max(1.6, dc * 0.006) * (1.0 - 0.6 * clamp((k - 6.0) / 0.9, 0.0, 1.0));            // burst spark
   vec4 vp = uView * vec4(p, 1.0);
   vp.xy += aTexCoord * size;
   vUv = aTexCoord;
@@ -57,6 +62,28 @@ void main(){
   } else if (vKind < 3.5){
     float ring = smoothstep(0.1, 0.0, abs(r - (0.55 + 0.15 * breathe)));
     c = vec3(0.55, 0.75, 1.0) * (ring * 0.55 + exp(-r * r * 30.0) * 0.5) * (0.6 + 0.4 * breathe);
+  } else if (vKind > 5.95){
+    // burst spark: a bright point with a four-ray glint, fading with age
+    float age = clamp((vKind - 6.0) / 0.9, 0.0, 1.0);
+    float rays = exp(-abs(vUv.x) * 18.0) * exp(-abs(vUv.y) * 2.5) + exp(-abs(vUv.y) * 18.0) * exp(-abs(vUv.x) * 2.5);
+    c = mix(vCol, vec3(1.0), 0.4) * (exp(-r * r * 22.0) * 1.6 + rays * 0.9) * (1.0 - age) * (1.0 - age);
+  } else if (vKind > 4.5){
+    // fragment: four luminous crystal petals, a white-hot heart, a soft halo; slowly turning
+    float burst = clamp((vKind - 5.0) / 0.9, 0.0, 1.0);
+    float a = atan(vUv.y, vUv.x) + uTime * 0.35 + vSeed;
+    float petal = pow(abs(cos(2.0 * a)), 0.7);                 // 4 petals
+    float edgeR = 0.16 + 0.5 * petal;
+    float body = smoothstep(edgeR + 0.03, edgeR - 0.03, r);
+    float rim = smoothstep(0.035, 0.0, abs(r - edgeR)) * step(0.2, petal);
+    float facet = 0.7 + 0.3 * smoothstep(0.05, 0.0, abs(fract(a / (PI * 0.25)) - 0.5) - 0.42);
+    float glint = pow(max(0.0, sin(uTime * 2.3 + vSeed * 3.0)), 12.0);
+    // kept below the bloom's saturation so each fragment keeps its own colour
+    c = vCol * body * (0.28 + 0.32 * facet) * (0.9 + 0.2 * breathe)
+      + mix(vCol, vec3(1.0), 0.35) * rim * 0.75
+      + mix(vCol, vec3(1.0), 0.6) * exp(-r * r * 140.0) * (0.8 + 0.6 * glint)
+      + vCol * exp(-r * r * 4.0) * 0.18;
+    // collection: the flower flares white and dissolves while a ring of its colour expands
+    c = c * (1.0 + 2.5 * burst) * (1.0 - burst) + mix(vec3(1.0), vCol, 0.4) * smoothstep(0.07, 0.0, abs(r - (0.2 + 0.75 * burst))) * 2.2 * (1.0 - burst);
   } else {
     c = vec3(0.45, 0.55, 0.8) * exp(-r * r * 26.0) * 0.18;
   }

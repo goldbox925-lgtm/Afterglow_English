@@ -40,6 +40,7 @@
       world = w;
       AG.CharacterDirector.setInfo(w.info);
       AG.Flight.build(w.info);
+      AG.Fragments.build(w.info, p);          // stage 05 collectibles (deterministic from the city)
       const vantage = U.v3.add(AG.CharacterDirector.spots.lie, [3, 10, 27]);
       AG.Restoration.init(p, w.info, vantage);
       AG.Interactions.build(w.info, AG.Restoration);

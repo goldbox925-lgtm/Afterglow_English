@@ -200,19 +200,38 @@ AG.Renderer = (function () {
   }
 
   /* the viewer's lights: fragile windows, nodes, threads */
+  const FRP = new Float32Array(48 * 4), FRS = new Float32Array(48 * 4);   // stage-05 fragment sprites
   function drawNetwork(F, S) {
     const d = AG.Interactions.renderData(F.at);
-    if (!d.count && !d.linkCount) return;
-    p.blendMode(p.ADD); gl.enable(gl.DEPTH_TEST); gl.depthMask(false);
-    if (d.linkCount) {
-      const sh = SH.netLink; p.shader(sh); common(sh, F);
-      sh.setUniform('uA', d.linkA); sh.setUniform('uB', d.linkB); sh.setUniform('uPal', PAL); sh.setUniform('uCount', d.linkCount);
-      netGeo.link.forEach((g) => p.model(g));
+    if (d.count || d.linkCount) {
+      p.blendMode(p.ADD); gl.enable(gl.DEPTH_TEST); gl.depthMask(false);
+      if (d.linkCount) {
+        const sh = SH.netLink; p.shader(sh); common(sh, F);
+        sh.setUniform('uA', d.linkA); sh.setUniform('uB', d.linkB); sh.setUniform('uPal', PAL); sh.setUniform('uCount', d.linkCount);
+        netGeo.link.forEach((g) => p.model(g));
+      }
+      if (d.count) {
+        const sh = SH.netNode; p.shader(sh); common(sh, F); fog(sh, S);
+        sh.setUniform('uP', d.nodes); sh.setUniform('uS', d.nodeS); sh.setUniform('uCount', d.count); sh.setUniform('uFogMul', 1);
+        netGeo.node.forEach((g) => p.model(g));
+      }
     }
-    if (d.count) {
-      const sh = SH.netNode; p.shader(sh); common(sh, F); fog(sh, S);
-      sh.setUniform('uP', d.nodes); sh.setUniform('uS', d.nodeS); sh.setUniform('uCount', d.count); sh.setUniform('uFogMul', 1);
-      netGeo.node.forEach((g) => p.model(g));
+    // stage 05: the revealed fragment (and collection bursts) with the same sprite program, drawn
+    // WITHOUT depth test so the city's buildings never hide the goal the player is looking for
+    if (AG.FSM.state === 'AFTERGLOW' && AG.Fragments && AG.Fragments.ready) {
+      const fr = AG.Fragments.sprites(F.at).slice(0, 48);
+      if (fr.length) {
+        FRP.fill(0); FRS.fill(0);
+        fr.forEach((o, i) => {
+          FRP[i * 4] = o.pos[0]; FRP[i * 4 + 1] = o.pos[1]; FRP[i * 4 + 2] = o.pos[2]; FRP[i * 4 + 3] = o.kind;
+          FRS[i * 4] = o.col[0]; FRS[i * 4 + 1] = o.col[1]; FRS[i * 4 + 2] = o.col[2]; FRS[i * 4 + 3] = o.lit;
+        });
+        p.blendMode(p.ADD); gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+        const sh = SH.netNode; p.shader(sh); common(sh, F); fog(sh, S);
+        sh.setUniform('uP', FRP); sh.setUniform('uS', FRS); sh.setUniform('uCount', fr.length); sh.setUniform('uFogMul', 1);
+        netGeo.node.forEach((g) => p.model(g));
+        gl.enable(gl.DEPTH_TEST);
+      }
     }
   }
 
