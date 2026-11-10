@@ -124,7 +124,29 @@ AG.CONFIG = {
     downtown: { x: -120, z: -620, radius: 520 },
     damageRate: 0.36,
     skylineRing: 220,
-    flightAvenueX: -190      // the avenue nearest this x becomes her flight canyon
+    flightAvenueX: -190,     // the avenue nearest this x becomes her flight canyon
+    /* Districts (js/city/building.js). p.noise(x × scale, z × scale) gives a
+       smooth 0..1 value over the map: below residentialBelow = residential,
+       above corporateAbove = corporate, otherwise mixed. heightScale/heightMix
+       blend a finer noise layer into building heights so they rise and fall
+       in patches. styles: weighted style tables per district and height
+       class (tall > 170 m, mid > 70 m, low). 'mixed' = the original mix.  */
+    districts: {
+      scale: 0.0024, residentialBelow: 0.42, corporateAbove: 0.58,
+      heightScale: 0.006, heightMix: 0.45,
+      heightFactor: { residential: 0.85, mixed: 1.0, corporate: 1.15 },
+      styles: {
+        residential: { tall: { corporate: 0.30, octa: 0.30, slab: 0.40 },
+                       mid:  { corporate: 0.15, hive: 0.60, slab: 0.15, octa: 0.10 },
+                       low:  { hive: 0.70, industrial: 0.20, corporate: 0.10 } },
+        mixed:       { tall: { corporate: 0.45, octa: 0.30, slab: 0.25 },
+                       mid:  { corporate: 0.35, hive: 0.35, slab: 0.15, octa: 0.15 },
+                       low:  { hive: 0.60, industrial: 0.25, corporate: 0.15 } },
+        corporate:   { tall: { corporate: 0.60, octa: 0.30, slab: 0.10 },
+                       mid:  { corporate: 0.55, hive: 0.15, slab: 0.15, octa: 0.15 },
+                       low:  { hive: 0.35, industrial: 0.15, corporate: 0.50 } }
+      }
+    }
   },
 
   /* ---------- Quality tiers (auto-adaptive) ----------------------------- */

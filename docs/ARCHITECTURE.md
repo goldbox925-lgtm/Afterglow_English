@@ -40,6 +40,7 @@ js/core/camera.js     shot list, cross-blends, free modes, parallax/drag/zoom, n
 js/city/geometryBuilder.js   merges primitives into ≤60k-vertex p5.Geometry chunks with packed data
 js/city/signAtlas.js  neon words rendered once to a 2048² canvas texture (R core, G halo, B letter id)
 js/city/cityGenerator.js     the procedural city, damage system, her rooftop, traffic lanes
+js/city/building.js          Building class: height/style/district via p.random + p.noise, render(), update()
 assets/character/manifest.js which image each pose uses, its size, anchor and plane mode
 js/character/characterAssets.js  loads poses, checks real alpha vs baked checkerboard, silhouette fallback
 js/character/characterDirector.js  pose track, dissolves/cuts/flashes, breathing, float, lift-off, flight placement

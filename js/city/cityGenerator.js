@@ -5,6 +5,16 @@
    downtown cluster, damage) apply to every seed, so each regeneration
    is a different city with the same soul.
 
+   Generative design with p5.js:
+     p.randomSeed(seed) + p.random()   every controlled variation (heights,
+                                       styles, signs, damage, details)
+     p.noiseSeed(seed)  + p.noise()    coherent districts and height patches
+                                       (see js/city/building.js)
+     an ARRAY of Building objects      built with loops; each one decides its
+                                       own height/style in its constructor and
+                                       writes its geometry with render()
+   Same seed → same sequence of random numbers → the same city, every time.
+
    Output meshes
      city      opaque architecture (city shader)            far pass
      hero      her building + rooftop (city shader)         near pass
@@ -30,7 +40,18 @@ AG.CityGenerator = (function () {
 
   function generate(seed, p) {
     const cfg = AG.CONFIG.city;
-    const R = AG.U.rng(seed);
+    // p5.js: seed both generators once, so this seed always gives this city
+    p.randomSeed(seed);
+    p.noiseSeed(seed);
+    p.noiseDetail(4, 0.5);
+    // the generator's random helpers, all backed by p5's seeded p.random()
+    const R = {
+      next: () => p.random(),                                   // 0..1
+      range: (lo, hi) => p.random(lo, hi),                      // lo..hi
+      int: (lo, hi) => Math.floor(p.random(lo, hi + 1)),        // whole number lo..hi
+      pick: (arr) => p.random(arr),                             // one element of an array
+      chance: (q) => p.random() < q                             // true with probability q
+    };
     const t0 = performance.now();
 
     const G = new AG.GeometryBuilder('city');
@@ -40,7 +61,7 @@ AG.CityGenerator = (function () {
     const T = new AG.GeometryBuilder('traffic');
 
     const atlas = AG.SignAtlas;
-    const info = { towers: [], holos: [], beams: [], avenuesX: [], avenuesZ: [], highway: null, hero: null, stats: {}, boxes: [] };
+    const info = { towers: [], holos: [], beams: [], avenuesX: [], avenuesZ: [], highway: null, hero: null, stats: {}, boxes: [], buildings: [] };
 
     const DN = 1400;
     const distN = (x, z) => Math.min(1, Math.hypot(x, z) / DN);
@@ -477,29 +498,18 @@ AG.CityGenerator = (function () {
       G.box(bx, 0, bz, BS, 0.2, BS);
     }
 
-    lots.forEach((L) => {
-      const dd = Math.hypot(L.x - dt.x, L.z - dt.z) / dt.radius;
-      const tall = Math.exp(-dd * dd * 1.6);
-      let h = AG.U.lerp(18, 95, Math.pow(R.next(), 1.6)) + tall * Math.pow(R.next(), 0.8) * R.range(120, 360);
-      // framing towers near her, open vista in front (-z)
-      if (L.dHero < 230 && Math.abs(L.x) > 50 && R.chance(0.55)) h = Math.max(h, R.range(105, 210));
-      if (L.z < -20 && L.z > -260 && Math.abs(L.x) < 110) h = Math.min(h, R.range(28, 70));
-      if (L.dHero < 90) h = Math.min(Math.max(h, 40), 150);
-      const lod = L.dHero < 400 ? 2 : L.dHero < 900 ? 1 : 0;
-      let style;
-      const s = R.next();
-      if (h > 170) style = s < 0.45 ? 'corporate' : s < 0.75 ? 'octa' : 'slab';
-      else if (h > 70) style = s < 0.35 ? 'corporate' : s < 0.7 ? 'hive' : s < 0.85 ? 'slab' : 'octa';
-      else style = s < 0.6 ? 'hive' : s < 0.85 ? 'industrial' : 'corporate';
-      const damaged = h > 45 && R.chance(cfg.damageRate * (h > 150 ? 1.35 : 1));
-      const b = { x: L.x, z: L.z, w: L.w, d: L.d, h, style, lod, damaged, hash: R.next() };
-      const res = building(b);
-      const hw = (L.w + 1.6) / 2, hd = (L.d + 1.6) / 2;
-      info.boxes.push({ x0: L.x - hw, x1: L.x + hw, z0: L.z - hd, z1: L.z + hd, top: Math.max(h * (damaged ? 0.92 : 1), res.top) + 6,
-        cx: L.x, cz: L.z, shaft: b.shaft || null, shafts: b.shafts || null, damaged, building: true });
-      b.top = res.top;
-      if (h > 110) info.towers.push(b);
-    });
+    // an array of Building objects: each decides its own height, style and
+    // district (p.random + p.noise) in its constructor ...
+    const buildings = info.buildings;
+    for (const L of lots) buildings.push(new AG.Building(L, p));
+    // ... then a loop writes each one into the shared GPU meshes (render)
+    // and registers its collision/interaction box (same format as before)
+    for (const b of buildings) {
+      b.render(building);
+      info.boxes.push(b.toBox());
+      if (b.h > 110) info.towers.push(b);
+    }
+    info.stats.districts = buildings.reduce((o, b) => { o[b.district] = (o[b.district] || 0) + 1; return o; }, {});
 
     /* ---------------- her flight route (Chapter 05) ----------------
        The avenue nearest config.city.flightAvenueX, reached along the street

@@ -5,7 +5,8 @@
      core/      fsm (5 emotional states), restoration (persistent field),
                 interactions (01–04), flight (05), story (atmosphere),
                 camera (director)
-     city/      geometry builder, sign atlas, procedural city
+     city/      geometry builder, sign atlas, procedural city,
+                Building class (p.random / p.noise, seeded per city)
      character/ image-based character: assets, director (poses)
      render/    passes & post-processing      shaders/  GLSL
      audio/     engine + ambience, adaptive generative score,
@@ -109,6 +110,9 @@
       if (entered && playing) AG.Interactions.update(dt, at, input, AG.Camera.state);
       else { input.click = null; input.enter = false; input.pressed = null; input.released = null; }
       AG.Restoration.update(dt, F.animTime);
+      // every building updates itself each frame (a loop over the array of Building objects)
+      let litBuildings = 0;
+      for (const b of world.info.buildings) { b.update(AG.Restoration); if (b.isLit()) litBuildings++; }
       if (entered && playing && F.state === 'AFTERGLOW' && !F.cinematic) {
         if (AG.Flight.finale) AG.Flight.drift(dt); else AG.Flight.update(dt, input, true);
       }
@@ -136,7 +140,7 @@
       adapt(dt);
       const IA = AG.Interactions, R = AG.Restoration;
       window.__AG_STATE = { state: F.state, mode: F.mode, cinematic: F.cinematic ? F.cinematic.name : null, fps: p.frameRate(), tier: AG.Renderer.getTier(),
-        progress: +R.progress.toFixed(3), districts: R.districts, lit: R.buildingsLit, mood: +S.mood.toFixed(3), rain: +S.rain.toFixed(2), damage: +S.damage.toFixed(2),
+        progress: +R.progress.toFixed(3), districts: R.districts, lit: R.buildingsLit, litBuildings, mood: +S.mood.toFixed(3), rain: +S.rain.toFixed(2), damage: +S.damage.toFixed(2),
         stabilised: IA.stabilised, connections: IA.connections, nodes: IA.nodes.length, hint: IA.hintLevel,
         split: cam.split, pose: CH ? CH.items.map((i) => i.id).join('>') : '', flight: cam.flight,
         alt: AG.Flight.ready ? Math.round(AG.Flight.pos[1]) : 0, asc: +AG.Flight.asc.toFixed(3), finale: AG.Flight.finale };
