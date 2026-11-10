@@ -30,16 +30,22 @@ The work is split across three technologies. Only the middle one is p5.js.
 
 2. **p5.js** (`js/audio/reactivity.js`, called once per frame from `sketch.js`)
    - `p.deltaTime`: frame time, so the smoothing behaves the same at any frame rate.
-   - `p.lerp()`: fast attack / slower release smoothing of each band, a slow running
-     baseline per band (its recent average level), and the ON/OFF cross-fade.
-   - `p.map()`: turns *smoothed − baseline* (how far the music rises above its own recent
-     level) into a 0..1 visual drive.
-   - `p.constrain()`: clamps the drive (and the frame time) to safe ranges.
+   - `p.lerp()`: attack/release smoothing of each band, a slow running baseline per band,
+     smoothing of the final drive, the ON/OFF cross-fade and the hand-off to the story.
+   - `p.map()`: two mappings per band, combined into the drive
+     (`drive = levelWeight × LEVEL + beatWeight × BEAT`, clamped, then smoothed):
+     - **LEVEL**: the smoothed level mapped `floor..ceil` → 0..1. Sustained music gives a
+       steady response.
+     - **BEAT**: *smoothed − baseline* mapped `0..span` → 0..1. Beats and swells push the
+       drive further.
+   - `p.constrain()`: clamps every mapped value (and the frame time) to safe ranges.
    - Plain JavaScript does the rest (`Math.exp` for the smoothing factor, DOM updates for
      the debug view).
-   - Why a baseline: in dense passages the analyser level barely moves (bass sat at a
-     constant 1.0 through `bands()`). Measuring the rise above the recent average makes the
-     visuals pulse with the music at any mix loudness.
+   - Why both parts: the first version used BEAT only. The baseline follows sustained
+     music within about 2 s, so *smoothed − baseline* sat near 0 most of the time (≈ 0 in
+     55–100% of samples, depending on band and stage) and every dip below the baseline
+     was clamped away. LEVEL keeps a response during sustained music; BEAT keeps it
+     moving with the music.
 
 3. **GLSL** (`js/render/renderer.js` passes the drives as uniforms)
    - Bass: the sky shader's `uCityGlow` and the composite shader's `uBloom`.
@@ -50,8 +56,17 @@ The work is split across three technologies. Only the middle one is p5.js.
    - Every effect is multiplied by its drive, so with a drive of 0 the image is
      identical to the original.
 
-Tuning lives in `AG.CONFIG.reactivity` (`js/config.js`): attack/release speeds, the `span`
-that counts as full drive, the baseline speed and the ON/OFF fade time.
+Tuning lives in `AG.CONFIG.reactivity` (`js/config.js`):
+- `levelWeight` / `beatWeight`;
+- per band: `floor` / `ceil` (set from the measured ranges below), `span` and
+  attack/release;
+- the drive smoothing (`outAttack` / `outRelease`);
+- the baseline speed;
+- the ON/OFF fade time.
+
+OFF fades the shader drives to 0 over about a second. The music values handed to the
+story (heartbeat and equaliser signs) ease to the story's neutral 0.2 before switching to
+its "no music" path, so nothing snaps.
 
 ## Testing
 
@@ -61,8 +76,9 @@ that counts as full drive, the baseline speed and the ON/OFF fade time.
 2. **Temporary debug view.** It shows, per band:
    - raw analyser value (orange bar);
    - smoothed value (cyan bar);
-   - baseline;
-   - the drive sent to the shaders.
+   - baseline (white tick);
+   - the **drive** sent to the shaders (magenta bar);
+   - the numbers for raw, smooth, base, level, beat and drive.
 
    It also shows ON/OFF, the audio source and play state.
 3. Click **Begin the story**. Raw and smoothed values move with the music. In stage 01 the
@@ -70,6 +86,15 @@ that counts as full drive, the baseline speed and the ON/OFF fade time.
 4. Click **AUDIO REACTIVITY ON** to switch it OFF. Raw values keep moving (the music is still
    playing), the drives fall to 0, and glow, windows and sparkles return to the original look.
 5. Press **Space** to pause. Raw and drive values fall to 0. Resume and they return.
+
+### Measured drive per stage (generative score, mean over 6 s)
+
+| Stage | bass | mid | treble | old BEAT-only bass / mid |
+|---|---|---|---|---|
+| 01 Numbness | 0.48 | 0.22 | 0 | 0.07 / 0.17 |
+| 03 Awakening | 0.46 | 0.46 | 0 | 0.05 / 0.28 |
+| 04 Reclaiming | 0.53 | 0.54 | 0.04 | 0.13 / 0.11 |
+| 05 Afterglow | 0.67 | 0.64 | 0.67 | 0.24 / 0.12 |
 
 ### Soundtrack content per stage (generative score, measured)
 

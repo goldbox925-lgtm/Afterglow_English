@@ -130,7 +130,10 @@ body.entered.ui-hidden #controls, body.entered.ui-hidden #hud { opacity: 0; poin
 #audioDebug .ad-bar i { position: absolute; left: 0; width: 0; }
 #audioDebug .ad-bar .raw { top: 0; height: 5px; background: rgba(255, 173, 92, 0.9); }
 #audioDebug .ad-bar .sm { bottom: 0; height: 5px; background: var(--cyan); }
-#audioDebug .ad-num { grid-column: 2; color: var(--dim); white-space: pre; }
+#audioDebug .ad-bar .base { top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; }
+#audioDebug .ad-drv-l { color: var(--dim); }
+#audioDebug .ad-bar.drv .dv { top: 0; bottom: 0; background: var(--magenta); }
+#audioDebug .ad-num { grid-column: 2; line-height: 1.5; color: var(--dim); white-space: pre; }
 select { background: rgba(255, 255, 255, 0.04); color: var(--ink); border: 1px solid var(--faint); border-radius: 14px; padding: 6px 10px; font-size: 11px; font-family: var(--font); cursor: pointer; }
 select option { background: #0b0b18; }
 

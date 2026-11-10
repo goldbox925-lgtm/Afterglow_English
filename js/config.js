@@ -23,18 +23,25 @@ AG.CONFIG = {
   },
 
   /* ---------- Audio reactivity (js/audio/reactivity.js) ----------
-     The visual drive follows how far a band rises ABOVE its own recent
-     average (a slow baseline), so it pulses with the music at any mix
-     loudness. attack/release: smoothing speed per second (p.lerp, higher
-     = faster). span: the rise above the baseline that p.map() turns into
-     full drive. baseline: how fast the baseline follows (per second).
+     drive = levelWeight × LEVEL + beatWeight × BEAT, clamped to 0..1, then
+     smoothed (outAttack / outRelease per second, p.lerp).
+       LEVEL: smoothed band level mapped floor..ceil → 0..1 (p.map). Keeps a
+              steady response while the music is sustained. floor/ceil are
+              set from the generative score's measured ranges.
+       BEAT:  rise above the slow baseline mapped 0..span → 0..1 (p.map).
+     attack/release: band smoothing speed per second (higher = faster).
+     baseline: how fast the baseline follows (per second).
      fadeTime: ON/OFF ease in seconds.                                  */
   reactivity: {
     fadeTime: 0.35,
     baseline: 0.5,
-    bass:   { attack: 22, release: 6,  span: 0.10 },
-    mid:    { attack: 18, release: 7,  span: 0.08 },
-    treble: { attack: 30, release: 10, span: 0.06 }
+    levelWeight: 0.6,
+    beatWeight: 0.6,
+    outAttack: 14,
+    outRelease: 5,
+    bass:   { attack: 22, release: 6,  floor: 0.55, ceil: 0.95, span: 0.10 },
+    mid:    { attack: 18, release: 7,  floor: 0.10, ceil: 0.70, span: 0.08 },
+    treble: { attack: 30, release: 10, floor: 0.01, ceil: 0.25, span: 0.04 }
   },
 
   /* ---------- The five emotional states (finite-state machine) ----------
