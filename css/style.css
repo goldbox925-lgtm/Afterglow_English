@@ -62,9 +62,6 @@ body.entered #hud { opacity: 1; }
 #brand { display: flex; gap: 18px; align-items: baseline; }
 .wordmark { letter-spacing: 0.42em; font-size: 12px; font-weight: 300; }
 #chapterLabel { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--dim); }
-.pill { font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--faint); color: var(--dim); text-transform: uppercase; }
-.pill.on { color: var(--cyan); border-color: rgba(34, 232, 255, 0.5); box-shadow: 0 0 12px rgba(34, 232, 255, 0.2); }
-.pill.denied, .pill.unavailable, .pill.insecure { color: var(--amber); border-color: rgba(255, 173, 92, 0.4); }
 
 /* ---------- chapter card ---------- */
 #chapterCard { position: fixed; left: 0; right: 0; top: 40%; z-index: 9; text-align: center; pointer-events: none; opacity: 0; }
@@ -120,11 +117,20 @@ body.entered.ui-hidden #controls, body.entered.ui-hidden #hud { opacity: 0; poin
 .chip.active { color: #fff; border-color: var(--magenta); box-shadow: 0 0 10px rgba(255, 42, 158, 0.35); }
 .chip.planned { opacity: 0.32; cursor: not-allowed; text-decoration: line-through; }
 .chip.coda { border-style: dashed; }
-#voicePanel { display: none; align-items: center; gap: 8px; font-size: 10px; color: var(--dim); font-family: var(--mono); }
-#voicePanel.show { display: flex; }
-#voicePanel input { width: 80px; accent-color: var(--cyan); }
-#meter { width: 46px; height: 4px; background: var(--faint); border-radius: 3px; overflow: hidden; }
-#meterFill { height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--magenta)); }
+/* AUDIO REACTIVITY ON/OFF (visuals only) */
+.react { flex: none; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; white-space: nowrap; padding: 7px 11px; border-radius: 14px; border: 1px solid var(--faint); background: transparent; color: var(--dim); cursor: pointer; transition: all 0.25s; }
+.react:hover { border-color: var(--ink); color: var(--ink); }
+.react.on { color: var(--cyan); border-color: rgba(34, 232, 255, 0.5); box-shadow: 0 0 12px rgba(34, 232, 255, 0.2); }
+/* TEMPORARY audio debug view (B key or ?audiodebug=1) */
+#audioDebug { position: fixed; left: 12px; top: 64px; z-index: 40; width: min(360px, calc(100vw - 24px)); padding: 10px 12px; border-radius: 10px; background: rgba(5, 6, 12, 0.85); border: 1px solid var(--faint); font-family: var(--mono); font-size: 10px; color: var(--ink); pointer-events: none; }
+#audioDebug .ad-head, #audioDebug .ad-foot { color: var(--dim); margin-bottom: 6px; }
+#audioDebug .ad-foot { margin: 6px 0 0; }
+#audioDebug .ad-row { display: grid; grid-template-columns: 48px 1fr; gap: 2px 8px; margin: 5px 0; }
+#audioDebug .ad-bar { position: relative; height: 10px; background: rgba(255, 255, 255, 0.06); border-radius: 3px; overflow: hidden; }
+#audioDebug .ad-bar i { position: absolute; left: 0; width: 0; }
+#audioDebug .ad-bar .raw { top: 0; height: 5px; background: rgba(255, 173, 92, 0.9); }
+#audioDebug .ad-bar .sm { bottom: 0; height: 5px; background: var(--cyan); }
+#audioDebug .ad-num { grid-column: 2; color: var(--dim); white-space: pre; }
 select { background: rgba(255, 255, 255, 0.04); color: var(--ink); border: 1px solid var(--faint); border-radius: 14px; padding: 6px 10px; font-size: 11px; font-family: var(--font); cursor: pointer; }
 select option { background: #0b0b18; }
 
@@ -163,7 +169,6 @@ body.paused #stage canvas { filter: none; }
 }
 
 /* ---------- volume ---------- */
-#vol { width: 64px; accent-color: var(--magenta); flex: none; }
 
 /* ---------- final title reveal ---------- */
 #titleReveal { position: fixed; inset: 0; z-index: 11; display: grid; place-content: center; text-align: center; pointer-events: none; opacity: 0; transition: opacity 2.2s ease; }
@@ -189,7 +194,7 @@ body.ended #titleReveal { opacity: 0; transition: opacity 1.6s ease; }
 .arow .st.loading, .arow .st.pending { color: var(--dim); }
 .arow .st.checkerboard, .arow .st.missing, .arow .st.no-alpha { color: var(--amber); }
 .arow.warn .au { color: rgba(255, 190, 130, 0.85); }
-@media (max-width: 860px) { .tr-title { font-size: clamp(30px, 9vw, 80px); letter-spacing: 0.28em; margin-right: -0.28em; } .arow { grid-template-columns: 18px 1fr 70px; } .arow .au { grid-column: 1 / -1; } #vol { display: none; } }
+@media (max-width: 860px) { .tr-title { font-size: clamp(30px, 9vw, 80px); letter-spacing: 0.28em; margin-right: -0.28em; } .arow { grid-template-columns: 18px 1fr 70px; } .arow .au { grid-column: 1 / -1; } }
 
 /* ---------- interactive stages ---------- */
 #stagePanel {

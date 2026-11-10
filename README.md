@@ -21,7 +21,12 @@ python3 -m http.server 8000        # or: npx serve .   or VS Code "Live Server"
 ```
 
 Use a local server rather than double-clicking `index.html`: browsers block image loading for
-WebGL textures from `file://`, and Voice Mode needs `http://localhost` or HTTPS.
+WebGL textures from `file://`.
+
+**Audio reactivity:** the soundtrack drives the city glow (bass), window pulses (mids) and
+sparkles (treble). The **AUDIO REACTIVITY ON/OFF** button in the control bar switches only
+that visual response; the music keeps playing either way. There is no microphone input and no
+mute/volume control. Details: [docs/AUDIO_REACTIVITY.md](docs/AUDIO_REACTIVITY.md).
 
 **Optional soundtrack:** put an original track at `assets/audio/soundtrack.mp3`. Without it, a
 generative score plays (one harmless `404` for that file appears in the console).
@@ -38,7 +43,7 @@ result can be compared side by side: open `/backup_original/index.html`. It can 
 publishing.
 
 All paths are relative, p5.js is bundled in `lib/`, shaders are JS strings (no `fetch`), and Pages
-serves HTTPS, so Voice Mode works there.
+serves HTTPS.
 
 ---
 
@@ -88,7 +93,7 @@ standing up in 04 is a struggle (sitting → pushing up, shaking → kneeling, l
 | Enter | select the pulse when it is near the centre | — |
 
 Space pause · R replay · 1–5 jump to a state (presentation; skipped states complete with default
-choices) · C camera view · M sound · V Voice Mode · N new city · F fullscreen · H hide UI · Q quality.
+choices) · C camera view · B audio debug view (temporary) · N new city · F fullscreen · H hide UI · Q quality.
 Arrow keys and Space never scroll the page.
 
 ## Documentation

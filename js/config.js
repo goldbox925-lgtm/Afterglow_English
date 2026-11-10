@@ -22,6 +22,21 @@ AG.CONFIG = {
     loadTimeoutMs: 5000
   },
 
+  /* ---------- Audio reactivity (js/audio/reactivity.js) ----------
+     The visual drive follows how far a band rises ABOVE its own recent
+     average (a slow baseline), so it pulses with the music at any mix
+     loudness. attack/release: smoothing speed per second (p.lerp, higher
+     = faster). span: the rise above the baseline that p.map() turns into
+     full drive. baseline: how fast the baseline follows (per second).
+     fadeTime: ON/OFF ease in seconds.                                  */
+  reactivity: {
+    fadeTime: 0.35,
+    baseline: 0.5,
+    bass:   { attack: 22, release: 6,  span: 0.10 },
+    mid:    { attack: 18, release: 7,  span: 0.08 },
+    treble: { attack: 30, release: 10, span: 0.06 }
+  },
+
   /* ---------- The five emotional states (finite-state machine) ----------
      States change ONLY when the viewer completes an interaction. Time is
      used for local animation, camera easing and sound, never to advance

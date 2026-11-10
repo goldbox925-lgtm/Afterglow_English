@@ -2,6 +2,8 @@
    City shader — all opaque architecture in a single program.
    Vertex stage:  fragments float / reassemble, voice-driven tremor,
                   glitch slicing of distant towers.
+   Audio reactivity (GLSL side): uAudioMid pulses lit windows, uAudioTreble
+   adds sparkles; both come from js/audio/reactivity.js and are 0 when OFF.
    Fragment stage: procedural windows (one by one, spreading outward
                   from her), wet glass, stained concrete, her rain-
                   rippled rooftop, streets with light veins and traffic.
@@ -82,6 +84,8 @@ uniform float uNear;        // 1 when rendering the near (rooftop) pass
 uniform float uEmitScale;   // debug / global emission trim
 uniform float uDamage;      // global severity of the physical damage (1 = devastated)
 uniform float uEmber;       // embers still glowing in the wounds
+uniform float uAudioMid;    // soundtrack mid band, smoothed (0 when AUDIO REACTIVITY is OFF)
+uniform float uAudioTreble; // soundtrack treble band, smoothed (0 when OFF)
 float gL = 0.0;             // restoration by the viewer at this fragment (field)
 vec3  gSCol = vec3(1.0);    // that area's colour
 
@@ -191,10 +195,21 @@ vec3 windows(vec3 wp, vec3 N, float bh, float mat, float distN, out float glassM
   float inten = (0.25 + 0.55 * h3) * (0.6 + 0.6 * fract(h2 * 9.0));
   vec3 em = wc * lit * inten * blinds * grad * (1.0 + 0.6 * onL) + wc * ignite + wc * ignL * 0.9;
   em *= glass ? 0.95 : 1.15;
+  // --- audio reactivity (no effect when both drives are 0) ---
+  // mid: lit windows pulse with the music, some rooms more than others
+  em *= 1.0 + uAudioMid * (0.5 + 1.0 * h3);
+  // treble: brief sparkles on the glass, re-picked ~14 times a second
+  float spT = floor(uTime * 14.0);
+  float spk = step(1.0 - 0.07 * uAudioTreble, hash12(cell * 1.73 + vec2(bh * 41.0, spT)));
+  em += vec3(0.85, 0.95, 1.0) * spk * uAudioTreble * 3.5;
   // --- far away: average instead of aliasing ---
   float far = smoothstep(0.25, 0.8, aa);
   float avgOn = max(clamp((rs - distN * 0.9) / 0.5, 0.0, 1.0), gL * 0.9) * 0.62;
   vec3 avgEm = mix(mix(warm, cool, 0.4), gSCol, 0.7 * gL) * (avgOn * 0.5 + uSurvivor * 0.4) * (0.45 + 0.3 * gL);
+  // audio reactivity, far away: the averaged windows pulse (mid) and sparkle on a coarse grid (treble)
+  avgEm *= 1.0 + uAudioMid * 0.8;
+  float spkF = step(1.0 - 0.06 * uAudioTreble, hash12(floor(vec2(u, wp.y) / 5.0) * 1.37 + vec2(bh * 13.0, spT)));
+  avgEm += vec3(0.85, 0.95, 1.0) * spkF * uAudioTreble * 2.0;
   glassMask = mix(inWin, 0.55, far);
   dark = 1.0 - lit;
   return mix(em * inWin, avgEm, far);

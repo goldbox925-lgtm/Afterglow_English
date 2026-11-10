@@ -3,17 +3,21 @@
    ---------------------------------------------------------------------
      master ─ compressor ─ destination
        ├─ musicBus  ← MP3 soundtrack  OR  generative score (fallback)
-       │     └─ analyser (low/mid/high bands drive the visuals)
+       │     └─ AnalyserNode (Web Audio API): a passive tap on the ONE
+       │        soundtrack signal. It outputs no sound, so nothing plays
+       │        twice. bands() → story; rawBands() → reactivity.js → shaders.
        ├─ ambBus    ← rain, city hum, traffic wash, wind (state-driven)
        └─ sfxBus    ← thunder, electrical glitches, bells (event-driven)
    The AudioContext is created only after the viewer clicks
    "Enter Experience" (browser autoplay policy).
+   There is deliberately no mute or volume control: the soundtrack
+   always plays at its designed level while the story is playing.
    ===================================================================== */
 window.AG = window.AG || {};
 
 AG.Audio = (function () {
   const U = AG.U, C = AG.CONFIG;
-  const A = { ctx: null, mode: 'none', muted: false, volume: 0.85, ready: false, el: null, mp3Status: 'checking' };
+  const A = { ctx: null, mode: 'none', volume: 0.85, ready: false, el: null, mp3Status: 'checking' };
   let master, comp, musicBus, ambBus, sfxBus, analyser, freq, reverb, reverbIn;
   const amb = {};
   let playing = false;
@@ -134,7 +138,7 @@ AG.Audio = (function () {
     playing = true;
     if (!A.ctx) return;
     if (A.ctx.state === 'suspended') A.ctx.resume();
-    fadeMaster(A.muted ? 0 : A.volume, 0.4);
+    fadeMaster(A.volume, 0.4);
     if (A.mode === 'mp3') A.el.play().catch(() => {});      // resumes where it was: never restarts
     if (A.mode === 'generative') AG.Score.resync(AG.Score.clock.t);
   }
@@ -153,8 +157,6 @@ AG.Audio = (function () {
     const g = master.gain, now = A.ctx.currentTime;
     g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(v, now + time);
   }
-  function setMuted(m) { A.muted = m; if (A.ctx && playing) fadeMaster(m ? 0 : A.volume, 0.3); U.emit('muted', m); }
-  function setVolume(v) { A.volume = U.clamp(v, 0, 1); if (A.ctx && playing && !A.muted) fadeMaster(A.volume, 0.15); U.emit('volume', A.volume); }
 
   /* ---------- per-frame: ambience follows the city's state ---------- */
   function set(param, v, tc) { param.setTargetAtTime(v, A.ctx.currentTime, tc || 0.3); }
@@ -176,12 +178,24 @@ AG.Audio = (function () {
     }
   }
 
+  /* Web Audio API: read the analyser's FFT magnitudes and average three bands
+     (bass 35–160 Hz, mid 250–2000 Hz, treble 3–9 kHz), each 0..1. Plain JS maths. */
   function bands() {
     if (!analyser) return { low: 0, mid: 0, high: 0 };
     analyser.getByteFrequencyData(freq);
     const binHz = A.ctx.sampleRate / analyser.fftSize;
     const avg = (f0, f1) => { let s = 0, n = 0; for (let i = Math.floor(f0 / binHz); i <= Math.floor(f1 / binHz); i++) { s += freq[i]; n++; } return n ? s / n / 255 : 0; };
     return { low: U.clamp(avg(35, 160) * 1.5, 0, 1), mid: U.clamp(avg(250, 2000) * 1.6, 0, 1), high: U.clamp(avg(3000, 9000) * 2.2, 0, 1) };
+  }
+  /* Web Audio API: the same three bands WITHOUT the gain and clamp above, so
+     the full dynamics survive (bands() saturates on dense passages). Used by
+     js/audio/reactivity.js; bands() keeps feeding the story unchanged. */
+  function rawBands() {
+    if (!analyser) return null;
+    analyser.getByteFrequencyData(freq);
+    const binHz = A.ctx.sampleRate / analyser.fftSize;
+    const avg = (f0, f1) => { let s = 0, n = 0; for (let i = Math.floor(f0 / binHz); i <= Math.floor(f1 / binHz); i++) { s += freq[i]; n++; } return n ? s / n / 255 : 0; };
+    return { bass: avg(35, 160), mid: avg(250, 2000), treble: avg(3000, 9000) };
   }
 
   /* ---------- event-driven sound: thunder, glitches, bells ---------- */
@@ -323,5 +337,5 @@ AG.Audio = (function () {
     });
   }
 
-  return Object.assign(A, { init, play, pause, seek, restart, setMuted, setVolume, update, bands, mediaTime, probePromise });
+  return Object.assign(A, { init, play, pause, seek, restart, update, bands, rawBands, mediaTime, probePromise });
 })();

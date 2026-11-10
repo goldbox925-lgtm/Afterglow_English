@@ -7,7 +7,7 @@
   <meta name="description" content="An interactive story about a broken heart, a city restored, and rebirth.">
   <meta name="theme-color" content="#05060c">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2305060c'/%3E%3Crect x='7' y='9' width='5' height='17' fill='%23ff2a9e'/%3E%3Crect x='14' y='4' width='5' height='22' fill='%2322e8ff'/%3E%3Crect x='21' y='12' width='4' height='14' fill='%238b45ff'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css?v=20261023readable">
+  <link rel="stylesheet" href="css/style.css?v=20261110react2">
 </head>
 <body>
   <div id="stage"></div>
@@ -22,14 +22,13 @@
       <button id="btnEnter" class="enter" disabled>Begin the story</button>
       <p id="loadMsg" class="load">Loading…</p>
       <p class="note">Five emotional states · <em>Numbness</em> → <em>Fracture</em> → <em>Awakening</em> → <em>Reclaiming Yourself</em> → <em>Rebirth</em><br>
-        The story moves forward only through you: find the light, restore the lights, bring the city back, fly, and rise.<br>Mouse and arrow keys · interactive 3D scene · microphone optional.</p>
+        The story moves forward only through you: find the light, restore the lights, bring the city back, fly, and rise.<br>Mouse and arrow keys · interactive 3D scene · the city moves with the soundtrack.</p>
     </div>
   </section>
 
   <!-- ===== HUD ===== -->
   <header id="hud">
     <div id="brand"><span class="wordmark">AFTERGLOW</span><span id="chapterLabel">01 · NUMBNESS</span></div>
-    <div id="hudRight"><span id="micStatus" class="pill off">mic off</span></div>
   </header>
 
   <div id="chapterCard">
@@ -63,15 +62,7 @@
         <span id="timeText">NUMBNESS</span>
       </div>
       <div id="chapters" title="Emotional states — presentation jump (earlier states complete with default choices)"></div>
-      <button id="btnSound" class="ic" title="Sound on/off (M)" aria-label="Sound"></button>
-      <input id="vol" type="range" min="0" max="1" step="0.05" value="0.85" title="Volume" aria-label="Volume">
-      <button id="btnVoice" class="ic" title="Voice Mode — microphone (V)" aria-label="Voice mode"></button>
-      <div id="voicePanel">
-        <label for="sens">sensitivity</label>
-        <input id="sens" type="range" min="0.3" max="3" step="0.1" value="1">
-        <span id="sensVal">1.0×</span>
-        <div id="meter"><div id="meterFill"></div></div>
-      </div>
+      <button id="btnReact" class="react on" aria-pressed="true" title="Let the soundtrack drive city glow, window pulses and sparkles. Visuals only: the music keeps playing either way.">AUDIO REACTIVITY ON</button>
       <select id="camMode" title="Camera mode (C)" aria-label="Camera mode"></select>
       <button id="btnRegen" class="ic" title="Generate a new city (N)" aria-label="New city"></button>
       <button id="btnFull" class="ic" title="Fullscreen (F)" aria-label="Fullscreen"></button>
@@ -94,7 +85,7 @@
         <dt>R</dt><dd>restart</dd>
         <dt>1 – 5</dt><dd>jump to a stage (for presentations)</dd>
         <dt>C</dt><dd>switch camera</dd>
-        <dt>M · V</dt><dd>sound · microphone</dd>
+        <dt>B</dt><dd>show / hide the audio debug view (temporary)</dd>
         <dt>N · F · H · Q</dt><dd>new city · fullscreen · hide interface · quality</dd>
       </dl>
       <dl>
@@ -103,7 +94,7 @@
         <dt>03 Awakening</dt><dd><b>Click five dark buildings marked with a glowing ring.</b> The light will pass to them.</dd>
         <dt>04 Reclaiming Yourself</dt><dd><b>Connect five pairs of golden points on the buildings.</b> Drag between them or click one, then the other.</dd>
         <dt>05 Rebirth</dt><dd>steer the flight: <b>mouse or ← →</b> to turn, <b>↓</b> to descend, <b>hold ↑</b> to rise quickly toward the light.</dd>
-        <dt>Microphone</dt><dd>loud sounds make the broken city tremble; a steady voice calms the rain. Optional.</dd>
+        <dt>Audio reactivity</dt><dd>with <b>AUDIO REACTIVITY ON</b>, the soundtrack's bass swells the city glow, its mids pulse the windows and its highs make them sparkle. <b>OFF</b> returns the original, steady look; the music keeps playing.</dd>
       </dl>
     </div>
     <div class="settings">
@@ -119,7 +110,6 @@
     </div>
     <h2 class="sub">Character images</h2>
     <div id="assetReport" class="assets"></div>
-    <p class="fine">The microphone signal is analysed only on your device. It is never recorded or sent anywhere. AFTERGLOW does not detect emotions.</p>
   </section>
 
   <!-- ===== End card ===== -->
@@ -138,10 +128,10 @@
 
   <!-- p5.js 1.11.11 (bundled locally for reliable GitHub Pages hosting; LGPL-2.1) -->
   <script src="lib/p5.min.js"></script>
-  <script src="js/config.js?v=20261022asc"></script>
+  <script src="js/config.js?v=20261110react2"></script>
   <script src="js/core/util.js?v=20261022asc"></script>
   <script src="js/shaders/common.glsl.js?v=20261022asc"></script>
-  <script src="js/shaders/city.glsl.js?v=20261022asc"></script>
+  <script src="js/shaders/city.glsl.js?v=20261110react3"></script>
   <script src="js/shaders/neon.glsl.js?v=20261022asc"></script>
   <script src="js/shaders/fx.glsl.js?v=20261022asc"></script>
   <script src="js/shaders/post.glsl.js?v=20261022asc"></script>
@@ -159,11 +149,12 @@
   <script src="js/core/interactions.js?v=20261022asc"></script>
   <script src="js/core/story.js?v=20261022asc"></script>
   <script src="js/core/camera.js?v=20261022asc"></script>
-  <script src="js/audio/mic.js?v=20261022asc"></script>
+  <script src="js/audio/mic.js?v=20261110react2"></script>
   <script src="js/audio/score.js?v=20261022asc"></script>
-  <script src="js/audio/audio.js?v=20261022asc"></script>
-  <script src="js/render/renderer.js?v=20261022asc"></script>
-  <script src="js/ui/ui.js?v=20261022asc"></script>
-  <script src="js/sketch.js?v=20261022asc"></script>
+  <script src="js/audio/audio.js?v=20261110react2"></script>
+  <script src="js/audio/reactivity.js?v=20261110react2"></script>
+  <script src="js/render/renderer.js?v=20261110react2"></script>
+  <script src="js/ui/ui.js?v=20261110react2"></script>
+  <script src="js/sketch.js?v=20261110react2"></script>
 </body>
 </html>

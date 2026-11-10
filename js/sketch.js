@@ -8,7 +8,8 @@
      city/      geometry builder, sign atlas, procedural city
      character/ image-based character: assets, director (poses)
      render/    passes & post-processing      shaders/  GLSL
-     audio/     engine + ambience, adaptive generative score, voice mode
+     audio/     engine + ambience, adaptive generative score,
+                reactivity (soundtrack → city glow / windows / sparkles)
    ===================================================================== */
 (function () {
   const U = AG.U, C = AG.CONFIG;
@@ -111,7 +112,9 @@
       if (entered && playing && F.state === 'AFTERGLOW' && !F.cinematic) {
         if (AG.Flight.finale) AG.Flight.drift(dt); else AG.Flight.update(dt, input, true);
       }
-      const music = playing ? AG.Audio.bands() : null;
+      // audio reactivity: Web Audio analyser bands → p5.js mapping & smoothing.
+      // OFF → null, the story's own "no music" path (the original non-reactive look).
+      const music = AG.Reactivity.update(p, playing ? AG.Audio.bands() : null, playing ? AG.Audio.rawBands() : null);
       const S = AG.Story.compute(dt, playing, input, music);
       if (!entered) { S.fade = Math.max(S.fade, 0.35); }
       const CH = AG.CharacterDirector.update(F.animTime, S);
@@ -157,11 +160,7 @@
       toggle() { if (!entered) return; AG.FSM.toggle(); },
       replay() { if (!entered) return; AG.Camera.snapNext(); AG.FSM.replay(); },
       jump(id) { if (!entered) return; AG.FSM.jumpTo(id); AG.Camera.snapNext(); },
-      sound() { AG.Audio.setMuted(!AG.Audio.muted); },
-      voice() {
-        if (!AG.Audio.ctx) { AG.UI.toast('Enter the experience first'); return; }
-        if (AG.Mic.state === 'on') AG.Mic.stop(); else AG.Mic.start(AG.Audio.ctx);
-      },
+      reactivity() { AG.Reactivity.setEnabled(!AG.Reactivity.enabled); },
       regen() {
         if (generating) return;
         AG.UI.toast('Building a new city…');
@@ -217,8 +216,7 @@
         if (setKey(k, true)) return;
         if (k === ' ') handlers.toggle();
         else if (k === 'r' || k === 'R') handlers.replay();
-        else if (k === 'm' || k === 'M') handlers.sound();
-        else if (k === 'v' || k === 'V') handlers.voice();
+        else if (k === 'b' || k === 'B') AG.Reactivity.toggleDebug();   // temporary audio debug view
         else if (k === 'c' || k === 'C') AG.Camera.cycle();
         else if (k === 'n' || k === 'N') handlers.regen();
         else if (k === 'f' || k === 'F') handlers.fullscreen();

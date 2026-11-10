@@ -12,6 +12,10 @@
           tower 5 km away crisp without z-fighting.
      bloom: bright-pass ¼ res → separable blur (× 2 levels on High)
      composite → canvas (tone map, grade, lens, glitch, grain, letterbox)
+   Audio reactivity: AG.Reactivity.drive (bass/mid/treble, 0..1, already
+   smoothed with p5.js) is passed to GLSL as uniforms: bass → sky city
+   glow + bloom, mid → uAudioMid (windows), treble → uAudioTreble (window
+   sparkles) + spark particles. All 0 when AUDIO REACTIVITY is OFF.
    ===================================================================== */
 window.AG = window.AG || {};
 
@@ -239,6 +243,7 @@ AG.Renderer = (function () {
     sh.setUniform('uSpot', F.spots.spots); sh.setUniform('uSpotC', F.spots.cols);
     sh.setUniform('tField', F.spots.field); sh.setUniform('uFieldBox', F.spots.box);
     sh.setUniform('uDamage', S.damage); sh.setUniform('uEmber', S.ember);
+    sh.setUniform('uAudioMid', AG.Reactivity.drive.mid); sh.setUniform('uAudioTreble', AG.Reactivity.drive.treble);
     geos.forEach((g) => p.model(g));
   }
   function drawNeon(F, S, geos) {
@@ -400,7 +405,7 @@ AG.Renderer = (function () {
     if (CH.sparkle > 0.01) {
       const m = CH.main, b = m.anchorPos;
       const c = AG.CHARACTER_MANIFEST.poses[m.id].anchor === 'bottom' ? [b[0], b[1] + 0.9, b[2]] : b;
-      sh.setUniform('uKind', 1); sh.setUniform('uAmount', CH.sparkle); sh.setUniform('uCharPos', c);
+      sh.setUniform('uKind', 1); sh.setUniform('uAmount', CH.sparkle * (1 + 1.5 * AG.Reactivity.drive.treble)); sh.setUniform('uCharPos', c);
       partGeo.sparks.forEach((g) => p.model(g));
     }
   }
@@ -411,7 +416,7 @@ AG.Renderer = (function () {
     if (CH.sparkle > 0.01) {
       const m = CH.main, b = m.anchorPos;
       const c = AG.CHARACTER_MANIFEST.poses[m.id].anchor === 'bottom' ? [b[0], b[1] + 0.9, b[2]] : b;
-      sh.setUniform('uKind', 1); sh.setUniform('uAmount', CH.sparkle); sh.setUniform('uCharPos', c);
+      sh.setUniform('uKind', 1); sh.setUniform('uAmount', CH.sparkle * (1 + 1.5 * AG.Reactivity.drive.treble)); sh.setUniform('uCharPos', c);
       partGeo.sparks.forEach((g) => p.model(g));
     }
   }
@@ -453,7 +458,10 @@ AG.Renderer = (function () {
     // 1. sky
     p.blendMode(p.BLEND); gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
     p.shader(SH.sky); common(SH.sky, F);
-    SH.sky.setUniform('uZenith', S.zenith); SH.sky.setUniform('uHorizon', S.horizon); SH.sky.setUniform('uCityGlow', S.cityGlow);
+    // bass → the glow the city throws on the sky (identical to the original when the drive is 0)
+    const bass = AG.Reactivity.drive.bass, gk = 1 + 1.2 * bass;
+    SH.sky.setUniform('uZenith', S.zenith); SH.sky.setUniform('uHorizon', S.horizon);
+    SH.sky.setUniform('uCityGlow', [S.cityGlow[0] * gk + 0.14 * bass, S.cityGlow[1] * gk + 0.05 * bass, S.cityGlow[2] * gk + 0.16 * bass]);
     SH.sky.setUniform('uFlash', S.flash); SH.sky.setUniform('uFlashX', S.flashX); SH.sky.setUniform('uDawn', S.dawn); SH.sky.setUniform('uCloud', S.cloud); SH.sky.setUniform('uSun', S.sun);
     p.model(sky);
 
@@ -520,7 +528,8 @@ AG.Renderer = (function () {
     p.shader(c);
     c.setUniform('tScene', sceneFB); c.setUniform('tBloom', bA); c.setUniform('tBloom2', cB);
     c.setUniform('uRes', [p.width, p.height]); c.setUniform('uTime', rt);
-    c.setUniform('uBloom', D.noBloom ? 0 : 0.6); c.setUniform('uExposure', D.exp !== undefined ? D.exp : S.exposure);
+    // bass → city glow: the bloom grows with the music (0.6 exactly when the drive is 0)
+    c.setUniform('uBloom', D.noBloom ? 0 : 0.6 * (1 + 0.9 * AG.Reactivity.drive.bass)); c.setUniform('uExposure', D.exp !== undefined ? D.exp : S.exposure);
     c.setUniform('uGlitch', S.glitch); c.setUniform('uFade', S.fade);
     c.setUniform('uLetterbox', R.letterbox); c.setUniform('uGrain', 0.035); c.setUniform('uVignette', 0.55);
     c.setUniform('uLens', tier.lens ? (cam.close || 0) * S.rain * 0.35 : 0);

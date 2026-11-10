@@ -51,7 +51,8 @@ js/shaders/*.glsl.js  GLSL ES 3.00: common, city, neon, traffic/rain/sky/figure,
 js/render/renderer.js passes, uniforms, HDR framebuffers, bloom, composite
 js/audio/audio.js     Web Audio graph, MP3 probe, ambience, event SFX, analyser bands
 js/audio/score.js     deterministic generative score (fallback soundtrack)
-js/audio/mic.js       Voice Mode analysis + Input (mic ⊕ mouse/keyboard)
+js/audio/reactivity.js soundtrack → visuals: p5 mapping/smoothing, ON/OFF, debug view
+js/audio/mic.js       Input (mouse/keyboard); AG.Mic is an always-off placeholder
 js/ui/ui.js           DOM controls, chapter cards, hints, toasts, end card
 js/sketch.js          p5 instance: boot, frame loop, handlers, keyboard, adaptive quality
 ```

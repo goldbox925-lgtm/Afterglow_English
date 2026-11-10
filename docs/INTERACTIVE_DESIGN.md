@@ -147,7 +147,7 @@ traffic, sky, grade, music filter and ambience. Nothing switches abruptly.
 * Web Audio: `AudioContext`, `OscillatorNode`, `GainNode`, `BiquadFilterNode`, `ConvolverNode`,
   `DynamicsCompressorNode`, `AnalyserNode`, `StereoPannerNode`, `WaveShaperNode`,
   `MediaElementAudioSourceNode`, `AudioBufferSourceNode`, `AudioParam.setTargetAtTime`,
-  `getUserMedia` (optional Voice Mode)
+  (the AnalyserNode taps the soundtrack for audio reactivity; no microphone input)
 * Canvas 2D: `createRadialGradient`, `globalCompositeOperation = 'lighten'`, `getImageData`
 * Pointer and keyboard events, with `preventDefault` on arrows and Space; `requestFullscreen`;
   `history.replaceState` (seed in the URL); `performance.now`; typed arrays (`Float32Array`) for
@@ -208,4 +208,3 @@ small sizes.
   `docs/CHARACTER_ASSETS.md`. D is a duplicate of C.
 * Audio was verified for wiring only. Listening to the adaptive score (section loops, ascension
   accents) and to an MP3 soundtrack (the low-pass opening with progress) needs a real browser.
-* Voice Mode requires HTTPS or localhost and permission. Everything works without it.
