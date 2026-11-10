@@ -75,6 +75,7 @@
       AG.Input.bind(p.canvas);
       AG.UI.init(handlers);
       AG.LightParticles.init(p);
+      AG.ScreenWords.init(p);
       AG.Story.bindEvents();
       AG.UI.setLoading('Generating the city…', false);
       AG.CharacterAssets.load(p, 'A');
@@ -127,6 +128,8 @@
       const CH = AG.CharacterDirector.update(F.animTime, S);
       // the trail's glints (p5.js LightParticle objects): advanced only while the story plays
       if (entered && playing) AG.LightParticles.update(dt, F.animTime, CH);
+      // the six word screens (stages 04–05): lit by stage 04 connections, all six in 05
+      AG.ScreenWords.update(entered && playing ? dt : 0);
       const cam = AG.Camera.update(F.animTime, dt, rt, input);
       AG.Audio.update(S, F.animTime, dt, playing);
       AG.Renderer.freeze = U.damp(AG.Renderer.freeze, entered && !playing ? 1 : 0, 4, dt);

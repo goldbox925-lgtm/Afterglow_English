@@ -166,3 +166,34 @@ pause   not updated (they hold still). Replay, a new city, or leaving stage 05 c
 
 They use a stateless hash for their randomness, never `p.random()`, so the city's seeded
 sequence is untouched.
+
+## Stage 04–05 word screens
+
+The six floating parapet pieces at her broken edge (`cityGenerator.js` `buildHero`, unchanged
+geometry, recorded as `info.hero.screens`) carry six words:
+**VOICE · COURAGE · JOY · FREEDOM · SELF-LOVE · BEGIN AGAIN**, joined by fine warm threads.
+
+- **Code:** `js/fx/screenWords.js` (activation, lettering texture, mesh) and
+  `js/shaders/screens.glsl.js`, drawn by `renderer.js` `drawScreenWords` right after her rooftop,
+  in the same pass.
+- **Placement:** the words sit on each screen's camera-facing side. The vertex shader applies
+  the same floating / homing offset as the city shader, so text and threads stay on their
+  screens.
+- **Lettering:** one letter size for all six words: the largest that fits every word inside its
+  own screen (about 7 cm letters; the screens are about 1.2 × 0.9 m).
+
+| Stage | Words | Threads |
+|---|---|---|
+| 01–03 | none | none |
+| 04 | Words 1–5 start as a faint ghost (7 %). Word *i* lights when `AG.Interactions.cityLinks` > *i*. `cityLinks` rises by exactly 1 per successful connection (duplicates / invalid pairs are rejected in `connectBuildings`), so connection *n* lights word *n*, once, in order. BEGIN AGAIN stays dark. | When word *i* lights, the thread from word *i − 1* draws in (0.9 s). |
+| 05 | All six. The 5th connection starts 05 in the same frame (lift-off scene): SELF-LOVE lights first, BEGIN AGAIN 0.35 s later. | All five; the last (SELF-LOVE → BEGIN AGAIN) draws in. |
+| Replay | All dark again. | None. |
+
+Timing uses game time (a pause freezes it). Words fade in over 0.8 s.
+
+Where the words can be read:
+- The lift-off scene's first shot (1.2 s) frames the six screens close up. All six are readable
+  at desktop and landscape-phone sizes.
+- In stage 04 the default camera is ~34 m away, where the screens are tiny; zoomed in (mouse
+  wheel) the words are small but readable.
+- On a portrait phone, the lift-off shot's letterbox does not include the screens.

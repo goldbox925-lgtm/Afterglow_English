@@ -48,6 +48,7 @@ AG.Renderer = (function () {
     SH.bright = makeShader(AG.SHADERS.bright);
     SH.blur = makeShader(AG.SHADERS.blur);
     SH.comp = makeShader(AG.SHADERS.composite);
+    SH.screens = makeShader(AG.SHADERS.screens);
 
     // fullscreen quad
     const Q = new AG.GeometryBuilder('quad');
@@ -479,6 +480,36 @@ AG.Renderer = (function () {
     }
   }
 
+  /* the six word screens at her broken parapet (stages 04–05, js/fx/screenWords.js): drawn
+     right after her rooftop, in the same pass, so they are depth-tested against it */
+  let swGeo = null, swWorld = null, swMip = false;
+  function drawScreenWords(F, S) {
+    const SW = AG.ScreenWords;
+    if (!SW || !SW.ready || !world || !SW.lit.some((v) => v > 0.002)) return;
+    if (swWorld !== world) {
+      if (swGeo && p.freeGeometry) swGeo.forEach((g) => p.freeGeometry(g));
+      swGeo = SW.buildMesh(world.info); swWorld = world;
+    }
+    if (!swGeo) return;
+    const sh = SH.screens;
+    additive();
+    p.shader(sh); common(sh, F); fog(sh, S);
+    sh.setUniform('uRebuild', S.rebuild); sh.setUniform('uTremor', S.tremor);
+    sh.setUniform('tField', F.spots.field); sh.setUniform('uFieldBox', F.spots.box);
+    sh.setUniform('tWords', SW.image); sh.setUniform('uLit', SW.lit); sh.setUniform('uLine', SW.line);
+    sh.setUniform('uStrength', 1);
+    swGeo.forEach((g) => p.model(g));
+    // smooth lettering at a distance: mipmaps for the word texture, once
+    if (!swMip) {
+      const tex = p._renderer.getTexture ? p._renderer.getTexture(SW.image) : null;
+      if (tex && tex.glTex) {
+        gl.bindTexture(gl.TEXTURE_2D, tex.glTex); gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        swMip = true;
+      }
+    }
+  }
+
   function opaque() { p.blendMode(p.BLEND); gl.enable(gl.DEPTH_TEST); gl.depthMask(true); }
   function additive() { p.blendMode(p.ADD); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); }
 
@@ -527,7 +558,7 @@ AG.Renderer = (function () {
     // 2. far pass
     opaque();
     if (!D.noCity) drawCity(F, S, world.city, false);
-    if (!cam.split) drawCity(F, S, world.hero, true);
+    if (!cam.split) { drawCity(F, S, world.hero, true); drawScreenWords(F, S); }
     additive();
     if (!D.noTraffic) drawTraffic(F, S);
     if (!D.noNeon) drawNeon(F, S, world.neon);
@@ -548,6 +579,7 @@ AG.Renderer = (function () {
       F.view = nr.view; F.proj = nr.proj;
       opaque();
       drawCity(F, S, world.hero, true);
+      drawScreenWords(F, S);
       additive();
       drawNeon(F, S, world.heroNeon);
       gl.depthMask(false); drawCharacter(F, S, cam, CH);

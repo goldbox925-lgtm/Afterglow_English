@@ -735,12 +735,17 @@ AG.CityGenerator = (function () {
       GB.box(0, H0 + ph, D / 2 - pt / 2, W + 0.2, 0.08, pt + 0.12);
       GB.box(-W / 2 + fl / 2, H0 + ph, -D / 2 + pt / 2, fl, 0.08, pt + 0.12);
       GB.box(W / 2 - fr / 2, H0 + ph, -D / 2 + pt / 2, fr, 0.08, pt + 0.12);
-      // the missing parapet pieces float just beyond the edge (fragments)
+      // the missing parapet pieces float just beyond the edge (fragments). They are also the
+      // six word screens of stages 04–05 (js/fx/screenWords.js): their boxes are recorded here,
+      // unchanged (same random calls in the same order)
+      const screens = [];
       for (let i = 0; i < 6; i++) {
         const id = 0.03 + i * 0.05;
         setData(GB, MAT.CONCRETE, id);
         const x = AG.U.lerp(gap[0] + 0.8, gap[1] - 0.6, (i + 0.5) / 6);
-        GB.obox([x, H0 + ph * 0.5, -D / 2 + pt / 2], [0.55 + R.range(-0.1, 0.15), ph * R.range(0.3, 0.5), pt / 2], [1, 0, 0], [0, 1, 0], [0, 0, 1], { skipBottom: false });
+        const c = [x, H0 + ph * 0.5, -D / 2 + pt / 2], h = [0.55 + R.range(-0.1, 0.15), ph * R.range(0.3, 0.5), pt / 2];
+        GB.obox(c, h, [1, 0, 0], [0, 1, 0], [0, 0, 1], { skipBottom: false });
+        screens.push({ c, h, frag: id });
       }
       // railing on the side parapets
       setData(GB, MAT.METAL);
@@ -828,7 +833,7 @@ AG.CityGenerator = (function () {
       NB.quad(c2(-1, -1), c2(1, -1), c2(1, 1), c2(-1, 1), faceN, [eB.u0, eB.v1, eB.u1, eB.v0]);
 
       return {
-        x: 0, z: 0, H0, W, D, fig,
+        x: 0, z: 0, H0, W, D, fig, screens,
         sign: { x: cen[0] + faceN[0] * 0.6, y: cen[1] + faceN[1] * 0.6 + 0.2, z: cen[2] + faceN[2] * 0.6 },
         door: { x: 13, y: H0 + 2.4, z: 9.6 }
       };
