@@ -151,6 +151,29 @@ AG.Camera = (function () {
     return { pos: cam, target, fov: U.lerp(60, 52, k), flight: true, rate: 1.2, anchor: p.slice() };
   }
 
+  /* ---------- STAGE 04 WORD CLOSE-UP ----------
+     When a connection lights one of words 1–4 on the screens at her broken parapet
+     (AG.ScreenWords.beat), the explore view eases to a close, slightly oblique look at that
+     screen and the previous one (so the new thread shows), holds, and eases back. Game time,
+     so a pause holds it. The viewer's look direction is kept and returned to afterwards.
+       0–0.7 s ease in · 0.7–2.5 s hold · 2.5–3.4 s ease out                              */
+  const BEAT_IN = 0.7, BEAT_HOLD = 1.8, BEAT_OUT = 0.9;
+  function wordBeat(base) {
+    const SW = AG.ScreenWords, b = SW && SW.beat, S = info && info.hero && info.hero.screens;
+    if (!b || !S || AG.FSM.state !== 'RECLAIMING_SELF') return null;
+    const t = AG.FSM.animTime - b.at, end = BEAT_IN + BEAT_HOLD + BEAT_OUT;
+    if (t < 0 || t > end) return null;
+    const w = t < BEAT_IN ? U.easeInOut(t / BEAT_IN) : t < BEAT_IN + BEAT_HOLD ? 1 : 1 - U.easeInOut((t - BEAT_IN - BEAT_HOLD) / BEAT_OUT);
+    const cs = S[b.i], ps = S[Math.max(0, b.i - 1)];
+    // look at the middle of the new word and the previous one; from her side away from it, so
+    // her figure (standing at the edge, x ≈ 0.6) does not cover the word
+    const mid = [(cs.c[0] + ps.c[0]) * 0.5, cs.c[1] + 0.12, cs.c[2]];
+    const side = cs.c[0] < 0.6 ? -1 : 1;
+    const pos = [mid[0] + side * 1.6, mid[1] + 1.0, mid[2] + 5.2];
+    const target = [mid[0], mid[1] - 0.05, mid[2] - 2.0];
+    return { pos: V.lerp(base.pos, pos, w), target: V.lerp(base.target, target, w), fov: U.lerp(base.fov, 38, w), explore: true, rate: 2.6, beat: w };
+  }
+
   /* ---------- EXPLORE (01–04) ---------- */
   function explorePose(dt, input) {
     const IA = AG.Interactions, Vt = vantage();
@@ -174,7 +197,8 @@ AG.Camera = (function () {
       ex.yaw += dy * (1 - Math.exp(-0.45 * dt)); ex.pitch = U.damp(ex.pitch, bp, 0.45, dt);
     }
     ex.pitch = U.clamp(ex.pitch, -0.5, 0.3);
-    return { pos: Vt.slice(), target: V.add(Vt, V.scale(exploreDir(), 120)), fov: ex.fov, explore: true };
+    const base = { pos: Vt.slice(), target: V.add(Vt, V.scale(exploreDir(), 120)), fov: ex.fov, explore: true };
+    return wordBeat(base) || base;
   }
 
   function freePose(rt) {

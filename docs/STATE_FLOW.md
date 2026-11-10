@@ -191,9 +191,19 @@ geometry, recorded as `info.hero.screens`) carry six words:
 
 Timing uses game time (a pause freezes it). Words fade in over 0.8 s.
 
+**Stage 04 close-up** (`js/core/camera.js` `wordBeat`):
+- When connections 1–4 light their word (`AG.ScreenWords.beat = { i, at }`), the explore view
+  eases to a close, slightly oblique look at the new word and the previous one, so the new
+  thread shows. It is taken from her side away from the word, so she does not cover it.
+- Timing (game time): 0.7 s in, 1.8 s hold, 0.9 s back; fov → 38.
+- Nothing is blocked. The viewer's look direction is kept and returned to.
+- The 5th connection has no beat: the stage 05 lift-off shot already frames all six.
+- A pause freezes the beat; Replay clears it.
+
 Where the words can be read:
-- The lift-off scene's first shot (1.2 s) frames the six screens close up. All six are readable
-  at desktop and landscape-phone sizes.
-- In stage 04 the default camera is ~34 m away, where the screens are tiny; zoomed in (mouse
-  wheel) the words are small but readable.
-- On a portrait phone, the lift-off shot's letterbox does not include the screens.
+- **Stage 04:** in each close-up (desktop and phone, readable). Between beats the default camera
+  is ~34 m away, where they show as lit screens; zooming in with the mouse wheel makes them
+  readable.
+- **Stage 05:** the lift-off scene's first shot (1.2 s) frames all six close up, readable at
+  desktop and landscape-phone sizes. On a portrait phone that shot's letterbox does not
+  include the screens.

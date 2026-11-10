@@ -20,6 +20,8 @@
              AGAIN lights 0.35 s into that scene, after SELF-LOVE, and its
              thread draws in from SELF-LOVE.
      Replay  everything returns to dark ('reset').
+   Close-up: when one of words 1–4 lights in stage 04, SW.beat = { i, at }
+   and the camera (camera.js wordBeat) takes a ~3.4 s close look at it.
 
    Drawing (renderer.js drawScreenWords, shader js/shaders/screens.glsl.js):
    one static mesh per city: a word quad on the camera-facing side of each
@@ -38,7 +40,7 @@ AG.ScreenWords = (function () {
   const FADE = 0.8;          // s for a word to light
   const DRAW = 0.9;          // s for a thread to draw in
   const BEGIN_DELAY = 0.35;   // s into the stage 05 lift-off before BEGIN AGAIN lights (its first shot shows the screens)
-  const SW = { ready: false, lit: [0, 0, 0, 0, 0, 0], line: [0, 0, 0, 0, 0], on: [false, false, false, false, false, false], log: [], WORDS };
+  const SW = { ready: false, beat: null, lit: [0, 0, 0, 0, 0, 0], line: [0, 0, 0, 0, 0], on: [false, false, false, false, false, false], log: [], WORDS };
   let p = null, widths = [];
 
   /* the lettering, once: rows 0–5 sharp, rows 6–11 the same words blurred (glow) */
@@ -110,6 +112,7 @@ AG.ScreenWords = (function () {
   }
 
   function reset() {
+    SW.beat = null;
     for (let i = 0; i < 6; i++) { SW.lit[i] = 0; SW.on[i] = false; }
     for (let i = 0; i < 5; i++) SW.line[i] = 0;
   }
@@ -125,7 +128,11 @@ AG.ScreenWords = (function () {
     const n = st === 'RECLAIMING_SELF' ? U.clamp(AG.Interactions.cityLinks || 0, 0, 5) : st === 'AFTERGLOW' ? (holdBack ? 5 : 6) : 0;
     for (let i = 0; i < 6; i++) {
       const want = i < n;
-      if (want && !SW.on[i]) { SW.on[i] = true; SW.log.push({ i, word: WORDS[i], state: st, links: AG.Interactions.cityLinks }); U.emit('screenLit', { i, word: WORDS[i] }); }
+      if (want && !SW.on[i]) {
+        // stage 04, connections 1–4: the camera takes a brief close look at the word (camera.js);
+        // the 5th connection starts stage 05, whose lift-off shot already frames the screens
+        if (st === 'RECLAIMING_SELF' && i < 4) SW.beat = { i, at: AG.FSM.animTime };
+        SW.on[i] = true; SW.log.push({ i, word: WORDS[i], state: st, links: AG.Interactions.cityLinks }); U.emit('screenLit', { i, word: WORDS[i] }); }
       if (!want && SW.on[i]) SW.on[i] = false;
       const target = want ? 1 : (st === 'RECLAIMING_SELF' && i < 5 ? DIM : 0);
       const step = dt / FADE;
