@@ -77,7 +77,7 @@ AG.Flight = (function () {
     F.pos = [0.6, H0 + 4.2, -24]; F.yaw = 0; F.yawRate = 0; F.speed = 0; F.vy = 0; F.bank = 0; F.upright = 0; F.asc = 0; F.finale = false;
     F.ascT = 0; F.released = 99; F.arc = false; F.phase = 'FLIGHT'; F.holding = false;
     trail = []; for (let i = 0; i < 24; i++) trail.push(F.pos.slice());
-    upHeld = 0; sinceUp = 99; cloudHit = false; pendingLift = 0; liftLeft = 0; lastTapAt = -1e9; steerHeld = 0; upDownAt = 0;
+    upHeld = 0; sinceUp = 99; cloudHit = false; pendingLift = 0; liftLeft = 0; lastTapAt = -1e9; steerHeld = 0; upDownAt = 0; upHeldT = 0;
     F.boosting = false; F.lifts = 0; F.doubleTaps = 0; F.finaleT = 0; F.gliding = false; F.finales = 0;
     resetMotion();
     if (AG.Fragments) AG.Fragments.reset();          // every flight starts with all five fragments in place
@@ -94,7 +94,7 @@ AG.Flight = (function () {
 
   /* key / touch input → F.keys. Taps of ↑ are detected HERE, at the press/release events
      (wall time), so even a tap shorter than one frame is never lost; update() applies them. */
-  let upDownAt = 0, pendingLift = 0, lastTapAt = -1e9, liftLeft = 0, steerHeld = 0;
+  let upDownAt = 0, pendingLift = 0, lastTapAt = -1e9, liftLeft = 0, steerHeld = 0, upHeldT = 0;
   function press(k, on) {
     const was = !!F.keys[k];
     F.keys[k] = !!on;
@@ -211,7 +211,11 @@ AG.Flight = (function () {
     //      only the fifth fragment does (below). ----
     const upNow = !F.finale && !!k.up;
     if (pendingLift > 0) { liftLeft += pendingLift; pendingLift = 0; F.lifts = (F.lifts || 0) + 1; }
-    const boosting = upNow && performance.now() - upDownAt >= FC.tapMax * 1000;
+    // how long ↑ has been held, in game seconds (dt comes from p.deltaTime): past tapMax it is a
+    // hold, i.e. a speed boost. (Taps themselves are classified at the key events in press(), so a
+    // tap shorter than one frame still counts.)
+    upHeldT = upNow ? upHeldT + dt : 0;
+    const boosting = upNow && upHeldT >= FC.tapMax;
     F.boosting = boosting; F.holding = boosting;
     // ---- steering: mouse x + ← → (only in free flight) ----
     // a held ← or → tightens gradually (up to turnRate × (1 + turnTighten)), so a sustained
@@ -224,7 +228,10 @@ AG.Flight = (function () {
     F.yawRate = U.damp(F.yawRate, U.clamp(turn, -1.8, 1.8), 3.2, dt);
     F.yaw += F.yawRate * dt;
     // ---- speeds ----
-    F.speed = U.damp(F.speed, boosting ? FC.boostMax : FC.cruise, FC.accel, dt);   // hold ↑ = faster, release = back to cruise
+    // hold ↑ = faster (cruise → boostMax), release = back to cruise. p.lerp with a frame-rate-
+    // independent factor 1 − e^(−accel·dt): the same ease at 30, 60 or 120 fps
+    F.speed = p ? p.lerp(F.speed, boosting ? FC.boostMax : FC.cruise, 1 - Math.exp(-FC.accel * dt))
+                : U.damp(F.speed, boosting ? FC.boostMax : FC.cruise, FC.accel, dt);
     // vertical: a level glide by default; taps/double-taps add metres to climb (liftLeft), followed
     // with an eased vertical speed (≤ riseSpeed) so the rise never snaps; ↓ descends and cancels it
     if (k.down) liftLeft = 0;
