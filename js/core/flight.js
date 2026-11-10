@@ -32,10 +32,16 @@
                 above the rooftops (the camera pulls back to show the city),
                 then the slow ASCENT into the sunrise (drift()).
 
-   Everything is integrated with dt and smoothed (U.damp), so behaviour is
-   the same at 30 or 120 fps. Collision avoidance: a probe ahead steers
-   away from towers before she reaches them; if she still touches a wall
-   she slides along it (no tunnelling, no sudden stops).
+   MOTION & COLLISIONS (move): her velocity is a p5.Vector that follows
+   the controls (heading × speed + vertical speed) with a short response;
+   near a facade or roof the speed toward it eases out (soft approach),
+   and on contact she SLIDES: the into-surface part of the velocity is
+   removed, the rest carries her along the building (js/core/collision.js:
+   sub-stepped sphere vs building boxes, so she cannot tunnel through).
+   Hands off the controls, a gentle look-ahead turn (steady side choice)
+   and a facade alignment help her glide round buildings; any steering
+   input overrides both. Everything uses dt (from p.deltaTime), so the
+   behaviour is the same at 10, 30 or 120 fps.
 
    segmentClear / clearance are shared with the camera (depth-aware
    chase) and the interaction module (line-of-sight).
@@ -50,13 +56,21 @@ AG.Flight = (function () {
   const phaseOf = (a) => { let n = PHASES[0][0]; for (const [id, t] of PHASES) if (a >= t) n = id; return n; };
   const FINALE_HOLD = 3;
   let boxes = [], H0 = 92, trail = [], trailClock = 0, upHeld = 0, sinceUp = 99, cloudHit = false;
+  // motion (p5.js vectors): vel = her actual velocity (m/s), cmd = what the controls ask for this
+  // frame, pos = scratch position for the collision sweep
+  let p = null, vel = null, cmd = null, pos = null;
 
-  function build(info) {
+  function build(info, p5inst) {
     boxes = info.boxes || [];
     H0 = info.hero.H0;
+    if (p5inst) p = p5inst;
+    if (p) { vel = p.createVector(0, 0, 0); cmd = p.createVector(0, 0, 0); pos = p.createVector(0, 0, 0); }
+    if (AG.Collision) AG.Collision.setBoxes(boxes);
     F.ready = true;
     reset();
   }
+  /* forget the current motion (used by reset and by tests that place her somewhere) */
+  function resetMotion() { if (vel) vel.set(0, 0, 0); F.flySpeed = 0; F.contact = false; F.avoidSide = 0; F.avoidHold = 0; }
 
   /* the moment she leaves the roof: just past the broken parapet, facing the city */
   function reset() {
@@ -65,6 +79,7 @@ AG.Flight = (function () {
     trail = []; for (let i = 0; i < 24; i++) trail.push(F.pos.slice());
     upHeld = 0; sinceUp = 99; cloudHit = false; pendingLift = 0; liftLeft = 0; lastTapAt = -1e9; steerHeld = 0; upDownAt = 0;
     F.boosting = false; F.lifts = 0; F.doubleTaps = 0; F.finaleT = 0; F.gliding = false; F.finales = 0;
+    resetMotion();
     if (AG.Fragments) AG.Fragments.reset();          // every flight starts with all five fragments in place
   }
 
@@ -110,19 +125,25 @@ AG.Flight = (function () {
     return U.lerp(38, Math.max(75, FC.ascend * 4), U.smooth(0, 1.6, a));
   }
 
-  /* collision avoidance: look ahead, steer toward the side with more room (returns extra turn) */
-  function avoidTurn(FC) {
-    const h = heading(F.yaw);
-    const ahead = V.add(F.pos, V.scale(h, FC.probe + F.speed * 0.6));
-    if (!F.arc && blockedAt(ahead, FC.wallMargin)) {
-      const l = V.add(F.pos, V.scale(heading(F.yaw - 0.7), FC.probe)), r = V.add(F.pos, V.scale(heading(F.yaw + 0.7), FC.probe));
-      const lb = blockedAt(l, FC.wallMargin), rb = blockedAt(r, FC.wallMargin);
-      const side = !lb && rb ? -1 : lb && !rb ? 1 : (AG.Flight.clearance(l) > AG.Flight.clearance(r) ? -1 : 1);
-      F.avoiding = true;
-      return side * 1.2;
-    }
-    F.avoiding = false;
-    return 0;
+  /* gentle look-ahead steering for HANDS-OFF flight: if a building is ahead, turn softly toward
+     the side with more room. The side is chosen once and kept while the way is blocked (plus a
+     short hold), so she never wobbles left-right in front of a wall. Returns extra turn (rad/s). */
+  function avoidTurn(FC, strength, dt) {
+    // test her actual path: a ray along her heading, with a margin just under her collision
+    // radius. (The old test inflated a single point 40 m ahead by 7 m, so a passable street, or
+    // flying parallel to a facade at her normal distance, counted as blocked and she turned
+    // into the walls or back on herself.) She now turns only while she is heading into a building.
+    const m = FC.radius - 0.2, len = FC.probe + F.speed * 0.6, hero = boxes.find((b) => b.hero);
+    const clearAlong = (yaw, L) => segmentClear(F.pos, V.add(F.pos, V.scale(heading(yaw), L)), m, hero);
+    if (!F.arc && clearAlong(F.yaw, len) < 1) {
+      if (!F.avoidSide) {
+        const cl = clearAlong(F.yaw - 0.7, FC.probe), cr = clearAlong(F.yaw + 0.7, FC.probe);
+        F.avoidSide = cl > cr ? -1 : cr > cl ? 1 : (AG.Flight.clearance(V.add(F.pos, V.scale(heading(F.yaw - 0.7), FC.probe))) > AG.Flight.clearance(V.add(F.pos, V.scale(heading(F.yaw + 0.7), FC.probe))) ? -1 : 1);
+      }
+      F.avoidHold = 0.5;
+    } else if ((F.avoidHold = Math.max(0, (F.avoidHold || 0) - dt)) === 0) F.avoidSide = 0;
+    F.avoiding = !!F.avoidSide;
+    return (F.avoidSide || 0) * strength;
   }
 
   /* steering input: mouse x (dead zone) + ← → (a held arrow tightens gradually) */
@@ -134,29 +155,52 @@ AG.Flight = (function () {
     steerHeld = steer ? steerHeld + dt : 0;
     const tighten = 1 + FC.turnTighten * U.smooth(0.4, 1.4, steerHeld);
     F.turnTight = tighten;
+    F.steering = steer !== 0 || mx !== 0;                     // the player is steering right now
     return mx * FC.mouseTurn + steer * FC.turnRate * tighten;
   }
 
-  /* integrate the velocity, slide along walls, keep between the ground and the ceiling */
+  /* MOTION — the commanded velocity (heading × speed, plus the vertical speed) is followed by her
+     actual velocity with a short, frame-rate-independent response (p5.Vector.lerp with
+     1 − e^(−response·dt)), its length limited with p.constrain. Then:
+       1. gentle proximity (AG.Collision.soften): toward a facade or roof her speed may not exceed
+          approach × the gap left, so she comes to rest at the boundary;
+       2. collide & slide (AG.Collision.sweep): sub-stepped movement; the part of the velocity
+          going into a surface is removed, the part along it is kept;
+       3. ground and ceiling.
+     dt comes from p.deltaTime (sketch.js), clamped to 0.1 s; the sweep sub-steps it. */
   function move(dt, FC) {
-    const h2 = heading(F.yaw);
-    let next = V.add(F.pos, V.add(V.scale(h2, F.speed * dt), [0, F.vy * dt, 0]));
-    const hit = blockedAt(next, FC.wallMargin * 0.5);
-    if (hit) {
-      const m = FC.wallMargin * 0.5;
-      const pen = [[next[0] - (hit.x0 - m), -1, 0], [(hit.x1 + m) - next[0], 1, 0], [next[2] - (hit.z0 - m), 0, -1], [(hit.z1 + m) - next[2], 0, 1]];
-      pen.sort((a, b) => a[0] - b[0]);
-      const [d, nx, nz] = pen[0];
-      next = [next[0] + nx * d, next[1], next[2] + nz * d];
-      const into = h2[0] * nx + h2[2] * nz;
-      if (into < 0 && !F.arc) F.yaw += Math.sign(h2[0] * nz - h2[2] * nx || 1) * 0.04;
-      F.speed *= 0.97;
+    if (!vel) {                                               // no p5 instance (should not happen): old straight move
+      F.pos = V.add(F.pos, V.add(V.scale(heading(F.yaw), F.speed * dt), [0, F.vy * dt, 0])); return;
     }
-    next[1] = Math.max(next[1], FC.minAlt);
+    const h = heading(F.yaw);
+    cmd.set(h[0] * F.speed, F.vy, h[2] * F.speed);
+    vel.lerp(cmd, 1 - Math.exp(-FC.response * dt));
+    const sp = vel.mag(), lim = p.constrain(sp, 0, FC.boostMax + FC.riseSpeed);
+    if (sp > lim) vel.setMag(lim);
+    pos.set(F.pos[0], F.pos[1], F.pos[2]);
+    // the soft approach starts early enough to ease out her current speed (≥ speed / approach)
+    const reach = Math.max(FC.softReach, vel.mag() / FC.approach + 1);
+    F.near = AG.Collision.soften(pos, vel, FC.radius, dt, FC.approach, reach);
+    const contacts = AG.Collision.sweep(pos, vel, FC.radius, dt);
+    F.contact = contacts.length > 0 || F.near < 0.6;          // touching, or resting against a surface
+    if (pos.y < FC.minAlt) { pos.y = FC.minAlt; if (vel.y < 0) vel.y = 0; }
     // ceiling just above the light threshold: the ending now comes from the fifth fragment,
     // so without it she could rise for ever and lose the fragments below; she hovers here instead
-    if (next[1] > FC.finaleAltitude + 30) { next[1] = FC.finaleAltitude + 30; if (F.vy > 0) F.vy = 0; liftLeft = 0; }
-    F.pos = next;
+    if (pos.y > FC.finaleAltitude + 30) { pos.y = FC.finaleAltitude + 30; if (vel.y > 0) vel.y = 0; if (F.vy > 0) F.vy = 0; liftLeft = 0; }
+    F.pos = [pos.x, pos.y, pos.z];
+    F.vel = [vel.x, vel.y, vel.z];
+    // her actual ground speed (for the camera and effects), eased so contact never flickers it
+    F.flySpeed = U.damp(F.flySpeed || 0, Math.hypot(vel.x, vel.z), 8, dt);
+  }
+
+  /* sliding along a facade with no steering input: turn her softly to face the way she is
+     actually gliding (≤ alignRate rad/s), so she flies along the wall and round its corners */
+  function alignTurn(FC) {
+    if (!F.contact || F.steering || !vel) return 0;
+    const vt = Math.hypot(vel.x, vel.z);
+    if (vt < 1.5) return 0;
+    const want = Math.atan2(vel.x, -vel.z), diff = Math.atan2(Math.sin(want - F.yaw), Math.cos(want - F.yaw));
+    return U.clamp(diff * 2, -FC.alignRate, FC.alignRate);
   }
 
   function update(dt, input, active) {
@@ -173,8 +217,10 @@ AG.Flight = (function () {
     // a held ← or → tightens gradually (up to turnRate × (1 + turnTighten)), so a sustained
     // turn becomes a controlled U-turn; short presses steer exactly as before
     let turn = steerTurn(FC, input, dt);
-    // ---- collision avoidance: look ahead, steer toward the side with more room ----
-    turn += avoidTurn(FC);
+    // ---- near buildings: a gentle look-ahead turn and facade alignment, only when she is not
+    //      being steered (the player's input always wins); collisions themselves slide (move) ----
+    if (!F.steering) turn += avoidTurn(FC, FC.avoidTurn, dt) + alignTurn(FC);
+    else { F.avoidSide = 0; F.avoiding = false; }
     F.yawRate = U.damp(F.yawRate, U.clamp(turn, -1.8, 1.8), 3.2, dt);
     F.yaw += F.yawRate * dt;
     // ---- speeds ----
@@ -250,7 +296,7 @@ AG.Flight = (function () {
         const tol = dist > 650 ? 0.3 : 0.8;
         turn += Math.sign(diff) * FC.glideGuide * U.smooth(tol, tol + 0.5, Math.abs(diff));
       }
-      turn += avoidTurn(FC);
+      turn += avoidTurn(FC, FC.glideAvoid, dt) + alignTurn(FC);   // hands-off glide: the original look-ahead strength
     }
     F.yawRate = U.damp(F.yawRate, U.clamp(turn, -1.2, 1.2), 3.2, dt);
     F.yaw += F.yawRate * dt;
@@ -272,7 +318,9 @@ AG.Flight = (function () {
   /* compatible state object (used by the camera and the character director) */
   function state() {
     const fwd = heading(F.yaw), right = V.norm(V.cross(fwd, [0, 1, 0])), up = [0, 1, 0];
-    return { pos: F.pos, fwd, right, up, bank: F.bank, speed: F.speed, speedN: U.clamp(F.speed / 30, 0, 1), upright: F.upright, vy: F.vy, off: [0, 0, 0] };
+    // speed = her ACTUAL ground speed (eased), so the camera and effects calm down when a wall stops her
+    const sp = F.flySpeed !== undefined && vel ? F.flySpeed : F.speed;
+    return { pos: F.pos, fwd, right, up, bank: F.bank, speed: sp, speedN: U.clamp(sp / 30, 0, 1), upright: F.upright, vy: F.vy, off: [0, 0, 0] };
   }
   function trailPoints() { const out = []; for (const p of trail) out.push(p[0], p[1], p[2]); return out; }
 
@@ -316,5 +364,5 @@ AG.Flight = (function () {
     return best;
   }
 
-  return Object.assign(F, { PHASES, phaseK, build, reset, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight, press });
+  return Object.assign(F, { PHASES, phaseK, build, reset, resetMotion, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight, press });
 })();

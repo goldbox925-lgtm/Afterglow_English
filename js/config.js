@@ -114,6 +114,14 @@ AG.CONFIG = {
     riseSpeed: 12,             // m/s: the fastest a lift climbs (it eases in and out)
     turnTighten: 0.55,         // a held ← / → turns up to 55 % faster (controlled U-turn)
     descend: 10, ascend: 19, minAlt: 9, wallMargin: 7, probe: 28,
+    /* motion & collisions (js/core/flight.js move, js/core/collision.js) */
+    radius: 2.4,               // m: her collision sphere (she keeps this far from facades and roofs)
+    response: 9,               // 1/s: how fast her actual velocity follows the controls (higher = snappier)
+    approach: 2.6,             // 1/s: near a surface, speed toward it ≤ approach × gap (soft stop at the boundary)
+    softReach: 8,              // m: how far ahead of contact the soft approach starts to act
+    alignRate: 0.6,            // rad/s: hands-off, sliding along a facade turns her to face along it
+    avoidTurn: 0.45,           // rad/s: hands-off look-ahead turn away from a building ahead (was 1.2)
+    glideAvoid: 1.2,           // rad/s: the same during the finale glide (unchanged)
     finaleAltitude: 420,       // metres: the light threshold (sky, cloud layer and flight ceiling are set from it)
     /* after the fifth fragment (Flight.drift + Camera finalePose): a glide, then the ascent */
     finaleGlide: 12,           // s of game time: she glides forward above the roofs before the ascent

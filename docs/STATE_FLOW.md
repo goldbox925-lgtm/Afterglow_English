@@ -207,3 +207,50 @@ Where the words can be read:
 - **Stage 05:** the lift-off scene's first shot (1.2 s) frames all six close up, readable at
   desktop and landscape-phone sizes. On a portrait phone that shot's letterbox does not
   include the screens.
+
+## Stage 05 flight: motion, collisions and camera
+
+Flight exists only in stage 05 (and its ending). In stages 01–04 she is placed by the scripted
+scenes on her roof and only the look-around camera moves, so these changes leave them untouched.
+
+**Motion** (`js/core/flight.js` `move`):
+- The controls set a commanded velocity: heading × speed (cruise 21, boost 30 m/s) plus the
+  vertical speed from taps / double-taps / ↓.
+- Her actual velocity (a `p5.Vector`) follows it with `vel.lerp(cmd, 1 − e^(−response·dt))`
+  (response 9 /s). Its length is limited with `p.constrain`.
+- `dt` is `p.deltaTime` in seconds, clamped to 0.1.
+
+**Collisions** (`js/core/collision.js`):
+- Buildings are solid boxes from the ground to the roof. She is a sphere of radius 2.4 m
+  (`flight.radius`).
+- *Soft approach:* within reach (≥ 8 m, and further at speed), her speed toward a surface is
+  limited to 2.6 × the remaining gap, so she comes to rest at the boundary instead of stopping
+  dead. Motion along the surface is untouched.
+- *Collide & slide:* the move is split into sub-steps of ≤ 1.2 m (no tunnelling, even at
+  30 m/s and 10 fps). After each sub-step, each nearby box's closest point gives a contact
+  normal (wall, roof or rounded edge / corner). She is moved out by exactly the overlap, and
+  only the velocity component into the surface is removed: she slides along it, never bounces.
+  Up to 4 passes resolve two buildings at once (inside corners, narrow streets).
+- A uniform grid (64 m cells) keeps each query to the few buildings around her.
+
+**Hands-off help** (never while the player steers):
+- A gentle look-ahead turn (0.45 rad/s; the finale glide keeps 1.2) toward the side with more
+  room. The side is chosen once and kept while the way is blocked, so there is no left-right
+  wobble.
+- The look-ahead tests her actual path: a ray along her heading, with a margin just under her
+  collision radius (`segmentClear`, radius − 0.2 m). So it acts only while she is heading into a
+  building. A passable street (≥ ~5 m), or flying parallel to a facade, does not trigger it.
+  After a glancing touch she deflects until she is parallel, then flies on along the wall.
+- Resting against or sliding along a facade turns her softly (≤ 0.6 rad/s) to face along it.
+
+**Camera** (`js/core/camera.js`):
+- The chase camera follows a smoothed heading (eased at 4.5 /s along the shortest way round).
+- The wall check that pulls the camera in front of a facade is eased: it shortens quickly
+  (14 /s) when a building cuts the view and lengthens slowly (2.2 /s) when it clears.
+- Scripted shots (lift-off, the stage 04 close-ups, the finale) are unchanged.
+
+**Round 02 (prepared, not used):** a building box may set `solid: false`, or
+`portals: [{ c, n, w, h, open }]`. Contacts on an open portal's rectangle (on the face whose
+normal matches `n`) are ignored, so she can fly in; the rest of the building stays solid.
+`AG.Collision.passable()` is the single place to extend this (for example to hand over to an
+interior scene).

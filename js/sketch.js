@@ -39,7 +39,7 @@
       AG.Renderer.setWorld(w);
       world = w;
       AG.CharacterDirector.setInfo(w.info);
-      AG.Flight.build(w.info);
+      AG.Flight.build(w.info, p);
       AG.Fragments.build(w.info, p);          // stage 05 collectibles (deterministic from the city)
       AG.LightParticles.clear();
       const vantage = U.v3.add(AG.CharacterDirector.spots.lie, [3, 10, 27]);

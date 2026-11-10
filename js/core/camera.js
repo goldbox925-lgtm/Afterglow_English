@@ -46,12 +46,12 @@ AG.Camera = (function () {
   let mode = 'film', info = null;
   const cur = { pos: [0, 200, 200], target: [0, 90, 0], fov: 45, close: 0 };
   let snap = true, dragYaw = 0, dragPitch = 0, zoom = 1, lastBeat = '';
-  let finaleAt = -1, finaleAnchor = null, finaleFwd = null, arcOn = false, arcAt = 0, arcSide = 1, lastAnchor = null;
+  let finaleAt = -1, finaleAnchor = null, finaleFwd = null, arcOn = false, arcAt = 0, arcSide = 1, lastAnchor = null, boom = 1;
   const out = {};
   const ex = { yaw: 0, pitch: -0.1, fov: 54, init: false, still: 0 };
 
   function setInfo(i) { info = i; snap = true; reset(); }
-  function reset() { ex.init = false; ex.yaw = 0; ex.pitch = -0.1; ex.fov = 54; finaleAt = -1; lastBeat = ''; snap = true; }
+  function reset() { ex.init = false; ex.yaw = 0; ex.pitch = -0.1; ex.fov = 54; finaleAt = -1; lastBeat = ''; snap = true; boom = 1; chaseAt = -1; }
   function setMode(m) { mode = m; AG.U.emit('cameraMode', m); }
   function cycle() { const i = MODES.findIndex((m) => m.id === mode); setMode(MODES[(i + 1) % MODES.length].id); }
   function snapNext() { snap = true; }
@@ -65,12 +65,24 @@ AG.Camera = (function () {
   }
 
   /* ---------- chase rig (05) ---------- */
+  /* the chase follows a SMOOTHED heading (eased toward hers at chaseTurn rad/s-ish, along the
+     shortest way round), so a quick turn or a slide along a facade swings the camera round
+     gracefully instead of whipping it. Picked up fresh after any break (a scene, another mode). */
+  let chaseYaw = 0, chaseAt = -1;
   function chase() {
-    const fs = AG.Flight.state(), p = fs.pos, up = fs.upright;
+    const fs = AG.Flight.state(), p = fs.pos, up = fs.upright, now = AG.FSM.animTime;
+    const yaw = AG.Flight.yaw;
+    if (chaseAt < 0 || now - chaseAt > 0.3 || now < chaseAt) chaseYaw = yaw;
+    else {
+      const k = 1 - Math.exp(-4.5 * Math.max(0, now - chaseAt));
+      chaseYaw += Math.atan2(Math.sin(yaw - chaseYaw), Math.cos(yaw - chaseYaw)) * k;
+    }
+    chaseAt = now;
+    const fwd = [Math.sin(chaseYaw), 0, -Math.cos(chaseYaw)], right = [Math.cos(chaseYaw), 0, Math.sin(chaseYaw)];
     const back = U.lerp(5.2, 8.5, up), height = U.lerp(1.1, -3.2, up);
-    const want = V.add(V.add(V.sub(p, V.scale(fs.fwd, back)), [0, height, 0]), V.scale(fs.right, 0.25 * fs.bank));
+    const want = V.add(V.add(V.sub(p, V.scale(fwd, back)), [0, height, 0]), V.scale(right, 0.25 * fs.bank));
     // ascending: look up past her into the light
-    const target = V.add(V.add(p, V.scale(fs.fwd, U.lerp(20, 4, up))), [0, U.lerp(0.4, 26, up), 0]);
+    const target = V.add(V.add(p, V.scale(fwd, U.lerp(20, 4, up))), [0, U.lerp(0.4, 26, up), 0]);
     return { pos: want, target, fov: 52 + 12 * fs.speedN + 10 * up, flight: true, fs };
   }
 
@@ -284,12 +296,16 @@ AG.Camera = (function () {
     let pos = V.add(desired.target, off);
     const target = desired.target.slice();
     pos = constrainToPose(pos, ch);
-    // depth-aware chase: never put a building between her and the lens
+    // depth-aware chase: never put a building between her and the lens. The pull-in is EASED
+    // (boom 0.25…1): it shortens quickly when a facade cuts the view and lengthens slowly when
+    // the view clears, so a building edge crossing the line never makes the camera jump
     if (desired.flight && ch && ch.main.anchorPos) {
       const her = ch.main.anchorPos;
       const f = AG.Flight.segmentClear(her, pos, 1.5);
-      if (f < 1) pos = V.lerp(her, pos, Math.max(0.25, f - 0.05));
-    }
+      const want = f < 1 ? Math.max(0.25, f - 0.05) : 1;
+      boom = snap ? want : U.damp(boom, want, want < boom ? 14 : 2.2, dt);
+      if (boom < 0.999) pos = V.lerp(her, pos, boom);
+    } else boom = 1;
     const fov = desired.fov;
     const rate = snap ? 1e6 : desired.rate ? desired.rate : desired.flight ? 7 : desired.explore ? 6 : desired.glide ? 1.4 : 2.6;
     // follow a rising subject without lag: carry the camera along with her, then ease the framing
