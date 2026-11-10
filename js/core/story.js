@@ -95,6 +95,9 @@ AG.Story = (function () {
     S.ember = (1 - U.smooth(0.15, 0.6, m)) * (st === 'NUMBNESS' ? 0.8 : 1);
     S.smoke = 1 - U.smooth(0.1, 0.75, m);
     S.rebuild = U.smooth(0.42, 0.95, m);                        // floating fragments come home everywhere
+    // stage 05 is the restored city: the rebuild completes over its first seconds (mood alone
+    // stops at ~0.93 there, which left the farthest towers' chunks short of home)
+    if (st === 'AFTERGLOW') S.rebuild = Math.max(S.rebuild, U.smooth(0, 4, F.stateTime));
     S.seam = U.smooth(0.42, 1.0, m);
 
     /* ---------- input interpretation (enhance only) ---------- */

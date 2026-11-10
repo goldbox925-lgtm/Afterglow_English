@@ -330,11 +330,27 @@ AG.CityGenerator = (function () {
       }
     }
 
+    /* The RESTORED TOP of a damaged tower: one plain volume from the fracture line up to the
+       tower's original height, on the same footprint as its floating chunks (an octagonal prism
+       for the octagonal towers). Fragment code −1: hidden while the city is broken, the city
+       shader dissolves it in as the tower is rebuilt (same timing as its chunks), so the
+       restored city shows whole towers instead of a sparse stack of chunks over a skeleton.
+       It uses only the building's own data — no random numbers — so every seed's city (and
+       everything generated after this tower) stays exactly the same.                      */
+    function restoreTop(GB, b, x, cut, z, w, d, fullH, mat, octaR) {
+      const lost = fullH - cut;
+      if (lost < 1) return;
+      setData(GB, mat, -1);
+      if (octaR > 0) GB.prism(x, cut, z, octaR, lost, 8, Math.PI / 8);
+      else GB.box(x, cut, z, w, lost, d);
+    }
+
     /* Exposed skeleton + floating fragments above a fracture line. */
     function fracture(GB, NB, b, x, cut, z, w, d, fullH, mat, lod) {
       const lost = fullH - cut;
-      // skeleton columns (jagged break)
-      setData(GB, MAT.GIRDER);
+      // skeleton columns (jagged break) + the partial slabs below: the DEBRIS of the break
+      // (fragment code −2: the city shader dissolves it away as the tower is restored)
+      setData(GB, MAT.GIRDER, -2);
       const nx = Math.max(2, Math.round(w / 7)), nz = Math.max(2, Math.round(d / 7));
       const slopeA = R.range(0, Math.PI * 2);
       for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++) {
@@ -365,9 +381,9 @@ AG.CityGenerator = (function () {
         const cx = x - w / 2 + (i + 0.5) * cw, cz = z - d / 2 + (j + 0.5) * cd, cy = cut + (l + 0.5) * chh;
         GB.obox([cx, cy, cz], [sx / 2, sy / 2, sz / 2], [1, 0, 0], [0, 1, 0], [0, 0, 1], { skipBottom: false });
       }
-      // a few broken girders that dangle out
+      // a few broken girders that dangle out (debris too)
       if (lod >= 1) {
-        setData(GB, MAT.GIRDER);
+        setData(GB, MAT.GIRDER, -2);
         for (let i = 0; i < 3; i++) {
           const a = R.range(0, Math.PI * 2), L = R.range(6, 14);
           const px = x + R.range(-w / 3, w / 3), pz = z + R.range(-d / 3, d / 3), py = cut + R.range(2, lost * 0.4);
@@ -404,6 +420,7 @@ AG.CityGenerator = (function () {
         y = ph;
       }
       let style = b.style;
+      let octaR = 0;                                            // the top octagon's radius (restored top)
       if (style === 'octa') {
         let r = Math.min(w, d) * 0.5, segs = R.int(2, 3), yy = y;
         const segH = (top - y) / segs;
@@ -419,6 +436,7 @@ AG.CityGenerator = (function () {
               G.box(b.x + Math.cos(a) * (r + 0.2), yy, b.z + Math.sin(a) * (r + 0.2), 0.5, segH, 0.5);
             }
           }
+          octaR = r;
           yy += segH; r *= R.range(0.78, 0.9);
         }
         w = d = r * 1.6;
@@ -467,7 +485,10 @@ AG.CityGenerator = (function () {
         y = yy;
       }
       facadeSigns(G, N, b, b.x, 0, b.z, b.w, top, b.d, lod, b.damaged);
-      if (b.damaged) fracture(G, N, b, b.x, top, b.z, w, d, fullH, style === 'hive' ? MAT.RESID : MAT.GLASS, lod);
+      if (b.damaged) {
+        fracture(G, N, b, b.x, top, b.z, w, d, fullH, style === 'hive' ? MAT.RESID : MAT.GLASS, lod);
+        restoreTop(G, b, b.x, top, b.z, w, d, fullH, style === 'hive' ? MAT.RESID : MAT.GLASS, octaR);
+      }
       return { top: y, w, d };
     }
 

@@ -254,3 +254,26 @@ scenes on her roof and only the look-around camera moves, so these changes leave
 normal matches `n`) are ignored, so she can fly in; the rest of the building stays solid.
 `AG.Collision.passable()` is the single place to extend this (for example to hand over to an
 interior scene).
+
+## Damaged towers in the restored city
+
+About a fifth of the towers are generated damaged (`cityGenerator.js` `fracture`):
+- The tower is cut at a fracture line, and the cut shows a bare steel skeleton and partial
+  floor slabs.
+- The missing top exists only as 4–13 chunks (none on distant towers). They float while the
+  city is broken and fly home as it is restored.
+- Home, those chunks fill only part of the missing volume, so a restored tower used to end in
+  a gappy, gold-edged stack over a skeleton, or simply stop at the cut.
+
+The fix:
+- **Restored top** (`restoreTop`): each damaged tower also gets one plain volume from the cut
+  to its original height, on the chunks' footprint (an octagonal prism for octagonal towers).
+  It uses the building's own data and no random numbers, so every seed's city is unchanged.
+- **Shader timing:** the city shader keeps it hidden while the city is broken and dissolves it
+  in as that area is rebuilt (same timing as the chunks, with a thin gold edge on the
+  dissolving front). The skeleton and slabs of the break dissolve out at the same time.
+  Fragment codes: −1 = restored top, −2 = debris.
+- **Stage 05:** the rebuild completes over the first 4 s of the stage (`story.js`). Mood alone
+  stops at ~0.93 there, which left the farthest chunks short of home.
+- Stages 01–03 look as before; in stage 04, towers complete where the viewer has restored
+  the city.

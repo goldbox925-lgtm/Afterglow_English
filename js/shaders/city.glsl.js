@@ -51,6 +51,14 @@ void main(){
     p += (off + wob + shiver) * away;
     vAssembled = a;
   }
+  // restored tops of damaged towers (frag −1) appear, and the bare skeleton / slabs of the break
+  // (frag −2) disappear, as that area is rebuilt — the same timing as the tower's chunks
+  if (frag < 0.0 && !isGround){
+    float Lv = fieldAt(aPosition).w;
+    float order = 0.45 + d.a * 0.5;
+    float a = smoothstep(order * 0.8, order * 0.8 + 0.18, max(uRebuild, Lv * 0.98));
+    vAssembled = frag < -1.5 ? 1.0 - a : a;
+  }
   if (!isGround && d.a > 0.0){
     float hgt = max(p.y, 0.0);
     float n1 = vnoise(vec3(p.x * 0.012, p.y * 0.02 + uTime * 0.5, p.z * 0.012)) - 0.5;
@@ -234,6 +242,14 @@ void main(){
   vec3 N = normalize(vNormal);
   vec3 V = normalize(uCamPos - wp);
   vec3 col = vec3(0.0), emit = vec3(0.0);
+  // restored top (−1) / debris of the break (−2): shown where noise < vAssembled, so it dissolves
+  // in (out) over the rebuild, with a thin warm edge on the moving front — never a pop
+  float rebuiltEdge = 0.0;
+  if (d.b < 0.0){
+    float rn = (vnoise(wp * 0.35) * 0.65 + vnoise(wp * 1.9 + 7.0) * 0.35) * 0.96;
+    if (rn >= vAssembled) discard;
+    rebuiltEdge = (1.0 - smoothstep(0.0, 0.05, vAssembled - rn)) * step(vAssembled, 0.999);
+  }
   float hemi = N.y * 0.5 + 0.5;
   vec3 amb = mix(uAmbGround, uAmbSky, hemi);
   vec3 flashL = uFlash * vec3(0.55, 0.65, 1.0) * (0.35 + 0.65 * max(N.y, 0.0)) * 0.9;
@@ -391,6 +407,9 @@ void main(){
 
   // near-field lights (fallen sign, door, lightning spill) on everything up close
   if (uNear > 0.5 && mat != 4.0) col += pointLights(wp, N, V, 32.0, 0.35, 0.3) * 0.06;
+
+  // the dissolving front of a restored top / of the debris: a thin kintsugi-gold edge
+  emit += vec3(1.0, 0.68, 0.36) * 1.6 * rebuiltEdge;
 
   // fragments: faint cold outline while suspended, warm kintsugi seams once home
   if (d.b > 0.0 && !(mat > 4.5 && mat < 5.5)){
