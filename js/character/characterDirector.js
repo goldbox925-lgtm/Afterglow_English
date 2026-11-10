@@ -68,7 +68,7 @@ AG.CharacterDirector = (function () {
     if (st === 'AFTERGLOW') {
       if (cin && cin.name === 'liftoff') return cin.t < 1.2 ? ['J', 0] : cin.t < 3.4 ? ['D', 0.9] : ['G', 0.5, true];
       const Fl = AG.Flight;
-      if (Fl.finale) return ['E', 0];
+      if (Fl.finale) return Fl.gliding ? ['G', 0.6] : ['E', 0];   // glide (back view, flying) → the ascent
       if (Fl.arc) {
         // ArrowUp is ascent, not a replay of her earlier suffering.
         // Keep her visibly airborne from the first press.

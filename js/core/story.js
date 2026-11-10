@@ -69,6 +69,9 @@ AG.Story = (function () {
     const m = mood; S.mood = m;
     const asc = st === 'AFTERGLOW' ? AG.Flight.asc : 0;
     const finale = finaleAt >= 0 ? at - finaleAt : -1;
+    // the finale has two parts (Flight.drift): a glide over the city, then the ascent. The light
+    // itself (sun, title, veil) keeps its original timing, counted from the start of the ascent.
+    const glideT = AG.CONFIG.flight.finaleGlide, ascentT = finale >= 0 ? finale - glideT : -1;
 
     /* ---------- impacts & lightning (event driven) ---------- */
     let impact = 0, flash = 0, fx = 0.3;
@@ -167,18 +170,22 @@ AG.Story = (function () {
     S.beaconHint = st === 'NUMBNESS' ? AG.Interactions.hintLevel : 0;
 
     /* ---------- ascension, cloud, sunrise ---------- */
-    S.dawn = st === 'AFTERGLOW' ? U.clamp(U.smooth(0.12, 0.85, asc) + (finale >= 0 ? U.smooth(0, 6, finale) * 0.2 : 0), 0, 1) : 0;
-    // the sun belongs to the LIGHT only; before it, a promise of dawn on the horizon
-    S.sun = st === 'AFTERGLOW' ? Math.max(0.25 * U.smooth(0.8, 1.0, asc), finale >= 0 ? U.smooth(0, 5, finale) : 0) : 0;
+    // during the glide the warm dawn builds slowly over the city (a little more than before,
+    // spread over the glide); the ascent then completes it as before
+    S.dawn = st === 'AFTERGLOW' ? U.clamp(U.smooth(0.12, 0.85, asc) + (finale >= 0 ? U.smooth(0, glideT + 6, finale) * 0.25 : 0), 0, 1) : 0;
+    // the sun belongs to the LIGHT (the ascent); during the glide only a promise of it on the horizon
+    S.sun = st === 'AFTERGLOW' ? Math.max(0.25 * U.smooth(0.8, 1.0, asc), finale >= 0 ? 0.25 * U.smooth(1, glideT, finale) : 0, ascentT >= 0 ? U.smooth(0, 5, ascentT) : 0) : 0;
     // the luminous cloud stays thin so she is never lost in it
-    S.cloudGlow = st === 'AFTERGLOW' ? 0.55 * U.smooth(0.15, 0.55, asc) * (1 - 0.85 * (finale >= 0 ? U.smooth(1, 5, finale) : U.smooth(0.94, 1, asc))) : 0;
-    S.title = finale >= 0 ? U.smooth(8, 10, finale) : 0;
+    S.cloudGlow = st === 'AFTERGLOW' ? 0.55 * U.smooth(0.15, 0.55, asc) * (1 - 0.85 * (finale >= 0 ? U.smooth(1, 5, ascentT) : U.smooth(0.94, 1, asc))) : 0;
+    S.title = ascentT >= 0 ? U.smooth(8, 10, ascentT) : 0;
     S.finale = finale;
 
     /* ---------- atmosphere & grade ---------- */
     const R = m, dawn = S.dawn;
     const shock = impact * (st === 'FRACTURE' || st === 'NUMBNESS' ? 1 : 0.4);
     S.fogDensity = U.lerp(0.0052, 0.0027, U.smooth(0.05, 0.9, R)) * (1 - dawn * 0.6);
+    // the finale glide clears the air so the restored city reads as a panorama, not a haze
+    if (finale >= 0) S.fogDensity *= 1 - 0.55 * U.smooth(0, glideT * 0.7, finale);
     S.fogFalloff = 0.011;
     S.fogLow = lerp3(lerp3([0.06, 0.072, 0.105], [0.24, 0.1, 0.23], R * 0.9), [0.4, 0.22, 0.3], dawn * 0.6);
     S.fogHigh = lerp3(lerp3([0.08, 0.095, 0.14], [0.12, 0.1, 0.2], R), [0.26, 0.22, 0.36], dawn * 0.6);
@@ -197,7 +204,7 @@ AG.Story = (function () {
 
     /* ---------- fades: in at the start; a soft veil only after the finale ---------- */
     let fade = 1 - U.smooth(0.05, 1.6, at - startAt);
-    if (finale >= 0) fade = Math.max(fade, 0.35 * U.smooth(9, 11, finale));
+    if (ascentT >= 0) fade = Math.max(fade, 0.35 * U.smooth(9, 11, ascentT));
     S.fade = fade;
 
     /* ---------- her body ---------- */

@@ -28,7 +28,9 @@
                 (liberation is not undone).
    FRAGMENTS    five collectibles along her route (js/core/fragments.js).
                 Collecting the fifth enters the light (LIGHT): the existing
-                ending sequence, via enterLight().
+                ending sequence, via enterLight(): first a steerable GLIDE
+                above the rooftops (the camera pulls back to show the city),
+                then the slow ASCENT into the sunrise (drift()).
 
    Everything is integrated with dt and smoothed (U.damp), so behaviour is
    the same at 30 or 120 fps. Collision avoidance: a probe ahead steers
@@ -62,7 +64,7 @@ AG.Flight = (function () {
     F.ascT = 0; F.released = 99; F.arc = false; F.phase = 'FLIGHT'; F.holding = false;
     trail = []; for (let i = 0; i < 24; i++) trail.push(F.pos.slice());
     upHeld = 0; sinceUp = 99; cloudHit = false; pendingLift = 0; liftLeft = 0; lastTapAt = -1e9; steerHeld = 0; upDownAt = 0;
-    F.boosting = false; F.lifts = 0; F.doubleTaps = 0;
+    F.boosting = false; F.lifts = 0; F.doubleTaps = 0; F.finaleT = 0; F.gliding = false; F.finales = 0;
     if (AG.Fragments) AG.Fragments.reset();          // every flight starts with all five fragments in place
   }
 
@@ -70,7 +72,7 @@ AG.Flight = (function () {
   function enterLight() {
     if (F.finale) return;
     const prev = F.phase;
-    F.finale = true; F.phase = 'LIGHT';
+    F.finale = true; F.phase = 'LIGHT'; F.finaleT = 0; F.gliding = true; F.finales = (F.finales || 0) + 1;
     AG.U.emit('ascPhase', { phase: 'LIGHT', prev });
     AG.U.emit('finale');
   }
@@ -108,47 +110,35 @@ AG.Flight = (function () {
     return U.lerp(38, Math.max(75, FC.ascend * 4), U.smooth(0, 1.6, a));
   }
 
-  function update(dt, input, active) {
-    if (!F.ready || !active) return;
-    const FC = AG.CONFIG.flight, k = F.keys;
-    // ---- ↑ (keyboard or touch): a SHORT press (released within FC.tapMax s) gives a small
-    //      upward lift; HOLDING it smoothly boosts forward speed. It never starts the ending:
-    //      only the fifth fragment does (below). ----
-    const upNow = !F.finale && !!k.up;
-    if (pendingLift > 0) { liftLeft += pendingLift; pendingLift = 0; F.lifts = (F.lifts || 0) + 1; }
-    const boosting = upNow && performance.now() - upDownAt >= FC.tapMax * 1000;
-    F.boosting = boosting; F.holding = boosting;
-    // ---- steering: mouse x + ← → (only in free flight) ----
-    let mx = input.mx || 0;
-    mx = Math.abs(mx) < FC.deadZone ? 0 : (mx - Math.sign(mx) * FC.deadZone) / (1 - FC.deadZone);
-    // a held ← or → tightens gradually (up to turnRate × (1 + turnTighten)), so a sustained
-    // turn becomes a controlled U-turn; short presses steer exactly as before
-    const steer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
-    steerHeld = steer ? steerHeld + dt : 0;
-    const tighten = 1 + FC.turnTighten * U.smooth(0.4, 1.4, steerHeld);
-    let turn = mx * FC.mouseTurn + steer * FC.turnRate * tighten;
-    // ---- collision avoidance: look ahead, steer toward the side with more room ----
+  /* collision avoidance: look ahead, steer toward the side with more room (returns extra turn) */
+  function avoidTurn(FC) {
     const h = heading(F.yaw);
     const ahead = V.add(F.pos, V.scale(h, FC.probe + F.speed * 0.6));
     if (!F.arc && blockedAt(ahead, FC.wallMargin)) {
       const l = V.add(F.pos, V.scale(heading(F.yaw - 0.7), FC.probe)), r = V.add(F.pos, V.scale(heading(F.yaw + 0.7), FC.probe));
       const lb = blockedAt(l, FC.wallMargin), rb = blockedAt(r, FC.wallMargin);
       const side = !lb && rb ? -1 : lb && !rb ? 1 : (AG.Flight.clearance(l) > AG.Flight.clearance(r) ? -1 : 1);
-      turn += side * 1.2;
       F.avoiding = true;
-    } else F.avoiding = false;
-    F.yawRate = U.damp(F.yawRate, U.clamp(turn, -1.8, 1.8), 3.2, dt);
+      return side * 1.2;
+    }
+    F.avoiding = false;
+    return 0;
+  }
+
+  /* steering input: mouse x (dead zone) + ← → (a held arrow tightens gradually) */
+  function steerTurn(FC, input, dt) {
+    const k = F.keys;
+    let mx = (input && input.mx) || 0;
+    mx = Math.abs(mx) < FC.deadZone ? 0 : (mx - Math.sign(mx) * FC.deadZone) / (1 - FC.deadZone);
+    const steer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+    steerHeld = steer ? steerHeld + dt : 0;
+    const tighten = 1 + FC.turnTighten * U.smooth(0.4, 1.4, steerHeld);
     F.turnTight = tighten;
-    F.yaw += F.yawRate * dt;
-    // ---- speeds ----
-    F.speed = U.damp(F.speed, boosting ? FC.boostMax : FC.cruise, FC.accel, dt);   // hold ↑ = faster, release = back to cruise
-    // vertical: a level glide by default; taps/double-taps add metres to climb (liftLeft), followed
-    // with an eased vertical speed (≤ riseSpeed) so the rise never snaps; ↓ descends and cancels it
-    if (k.down) liftLeft = 0;
-    const targetVy = k.down ? -FC.descend : liftLeft > 0.05 ? Math.min(FC.riseSpeed, 2 + liftLeft * 1.3) : 0;
-    F.vy = U.damp(F.vy, targetVy, 2.4, dt);
-    if (F.vy > 0) liftLeft = Math.max(0, liftLeft - F.vy * dt);
-    // ---- integrate + collide ----
+    return mx * FC.mouseTurn + steer * FC.turnRate * tighten;
+  }
+
+  /* integrate the velocity, slide along walls, keep between the ground and the ceiling */
+  function move(dt, FC) {
     const h2 = heading(F.yaw);
     let next = V.add(F.pos, V.add(V.scale(h2, F.speed * dt), [0, F.vy * dt, 0]));
     const hit = blockedAt(next, FC.wallMargin * 0.5);
@@ -167,6 +157,35 @@ AG.Flight = (function () {
     // so without it she could rise for ever and lose the fragments below; she hovers here instead
     if (next[1] > FC.finaleAltitude + 30) { next[1] = FC.finaleAltitude + 30; if (F.vy > 0) F.vy = 0; liftLeft = 0; }
     F.pos = next;
+  }
+
+  function update(dt, input, active) {
+    if (!F.ready || !active) return;
+    const FC = AG.CONFIG.flight, k = F.keys;
+    // ---- ↑ (keyboard or touch): a SHORT press (released within FC.tapMax s) gives a small
+    //      upward lift; HOLDING it smoothly boosts forward speed. It never starts the ending:
+    //      only the fifth fragment does (below). ----
+    const upNow = !F.finale && !!k.up;
+    if (pendingLift > 0) { liftLeft += pendingLift; pendingLift = 0; F.lifts = (F.lifts || 0) + 1; }
+    const boosting = upNow && performance.now() - upDownAt >= FC.tapMax * 1000;
+    F.boosting = boosting; F.holding = boosting;
+    // ---- steering: mouse x + ← → (only in free flight) ----
+    // a held ← or → tightens gradually (up to turnRate × (1 + turnTighten)), so a sustained
+    // turn becomes a controlled U-turn; short presses steer exactly as before
+    let turn = steerTurn(FC, input, dt);
+    // ---- collision avoidance: look ahead, steer toward the side with more room ----
+    turn += avoidTurn(FC);
+    F.yawRate = U.damp(F.yawRate, U.clamp(turn, -1.8, 1.8), 3.2, dt);
+    F.yaw += F.yawRate * dt;
+    // ---- speeds ----
+    F.speed = U.damp(F.speed, boosting ? FC.boostMax : FC.cruise, FC.accel, dt);   // hold ↑ = faster, release = back to cruise
+    // vertical: a level glide by default; taps/double-taps add metres to climb (liftLeft), followed
+    // with an eased vertical speed (≤ riseSpeed) so the rise never snaps; ↓ descends and cancels it
+    if (k.down) liftLeft = 0;
+    const targetVy = k.down ? -FC.descend : liftLeft > 0.05 ? Math.min(FC.riseSpeed, 2 + liftLeft * 1.3) : 0;
+    F.vy = U.damp(F.vy, targetVy, 2.4, dt);
+    if (F.vy > 0) liftLeft = Math.max(0, liftLeft - F.vy * dt);
+    move(dt, FC);
     // ---- body ----
     F.bank = U.damp(F.bank, F.arc ? 0 : U.clamp(-F.yawRate * 0.42, -0.55, 0.55), 4, dt);
     F.upright = U.damp(F.upright, F.arc ? 1 : 0, 1.6, dt);
@@ -190,11 +209,63 @@ AG.Flight = (function () {
     return U.clamp((a - t0) / (t1 - t0), 0, 1);
   }
 
-  /* the finale: a slow, directed drift upward into the sunrise */
-  function drift(dt) {
-    F.vy = U.damp(F.vy, 7, 0.8, dt); F.speed = U.damp(F.speed, 2, 0.8, dt);
-    F.pos = V.add(F.pos, V.add(V.scale(heading(F.yaw), F.speed * dt), [0, F.vy * dt, 0]));
-    F.upright = U.damp(F.upright, 1, 1.5, dt); F.bank = U.damp(F.bank, 0, 2, dt);
+  /* the highest roof right on her path (0–120 m ahead, ±12 m to the sides); anything to the side
+     is left to the collision avoidance, so the glide does not climb over every tower around her */
+  function roofAhead() {
+    const h = heading(F.yaw), R = 12;
+    let top = 0;
+    for (const b of boxes) {
+      if (b.hero || b.top <= top) continue;
+      for (let d = 0; d <= 120; d += 20) {
+        const px = F.pos[0] + h[0] * d, pz = F.pos[2] + h[2] * d;
+        if (Math.max(b.x0 - px, 0, px - b.x1) < R && Math.max(b.z0 - pz, 0, pz - b.z1) < R) { top = b.top; break; }
+      }
+    }
+    return top;
+  }
+
+  /* the finale (after the fifth fragment), counted in game time (F.finaleT += dt; this runs
+     only while the story is playing, so pause freezes it):
+       GLIDE   0 … finaleGlide s: she glides forward above the rooftops (easing up to clear the
+               roofs ahead, never down), steerable with the mouse / ← →, so the restored city
+               opens out below her while the camera pulls back (camera.js finalePose)
+       ASCENT  then the existing slow, directed drift upward into the sunrise (vy → 7 m/s,
+               forward speed → 2 m/s), still gently steerable                                 */
+  function drift(dt, input) {
+    const FC = AG.CONFIG.flight;
+    F.finaleT += dt;
+    F.gliding = F.finaleT < FC.finaleGlide;
+    // steering, as in free flight but gentler (the ending is not a chase)
+    const steer = steerTurn(FC, input, dt);
+    let turn = steer * (F.gliding ? 0.6 : 0.5);
+    if (F.gliding) {
+      // hands off: the glide bends gently back over the city (toward downtown) so the panorama
+      // is the restored city, not the empty land past its edge; any steering overrides it
+      const D = AG.CONFIG.city.downtown, dx = D.x - F.pos[0], dz = D.z - F.pos[2];
+      // (only until downtown is within ~50° of her heading, ~20° when she is far out past the
+      // edge of the city: the city stays in view ahead, and she is not steered into the towers)
+      const dist = Math.hypot(dx, dz);
+      if (Math.abs(steer) < 0.01 && dist > FC.glideGuideNear) {
+        const diff = Math.atan2(Math.sin(Math.atan2(dx, -dz) - F.yaw), Math.cos(Math.atan2(dx, -dz) - F.yaw));
+        const tol = dist > 650 ? 0.3 : 0.8;
+        turn += Math.sign(diff) * FC.glideGuide * U.smooth(tol, tol + 0.5, Math.abs(diff));
+      }
+      turn += avoidTurn(FC);
+    }
+    F.yawRate = U.damp(F.yawRate, U.clamp(turn, -1.2, 1.2), 3.2, dt);
+    F.yaw += F.yawRate * dt;
+    if (F.gliding) {
+      F.speed = U.damp(F.speed, FC.glideSpeed, 0.9, dt);
+      const want = Math.min(Math.max(roofAhead() + FC.glideClear, FC.glideMinAlt, F.pos[1]), FC.glideMaxAlt);
+      F.vy = U.damp(F.vy, U.clamp((want - F.pos[1]) * 0.5, 0, FC.glideClimb), 1.2, dt);
+      F.upright = U.damp(F.upright, 0, 1.5, dt);
+      F.bank = U.damp(F.bank, U.clamp(-F.yawRate * 0.42, -0.45, 0.45), 4, dt);
+    } else {
+      F.vy = U.damp(F.vy, 7, 0.8, dt); F.speed = U.damp(F.speed, 2, 0.8, dt);
+      F.upright = U.damp(F.upright, 1, 1.5, dt); F.bank = U.damp(F.bank, 0, 2, dt);
+    }
+    move(dt, FC);
+    F.asc = U.clamp((F.pos[1] - H0) / (FC.finaleAltitude - H0), 0, 1);       // the dawn follows her up
     trailClock -= dt; if (trailClock <= 0) { trail.unshift(F.pos.slice()); trail.length = 24; trailClock = 0.05; }
   }
 

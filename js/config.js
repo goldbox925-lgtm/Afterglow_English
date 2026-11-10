@@ -114,7 +114,17 @@ AG.CONFIG = {
     riseSpeed: 12,             // m/s: the fastest a lift climbs (it eases in and out)
     turnTighten: 0.55,         // a held ← / → turns up to 55 % faster (controlled U-turn)
     descend: 10, ascend: 19, minAlt: 9, wallMargin: 7, probe: 28,
-    finaleAltitude: 420        // metres: reaching it while holding ↑ after ≥ 18 s of ascension enters the light
+    finaleAltitude: 420,       // metres: the light threshold (sky, cloud layer and flight ceiling are set from it)
+    /* after the fifth fragment (Flight.drift + Camera finalePose): a glide, then the ascent */
+    finaleGlide: 12,           // s of game time: she glides forward above the roofs before the ascent
+    glideSpeed: 16,            // m/s forward during the glide
+    glideClear: 15,            // m of safety above a roof right on her path (0–120 m ahead, ±12 m)
+    glideMinAlt: 160,          // m: she eases up to at least this (above ~95 % of the roofs), never down
+    glideMaxAlt: 230,          // m: the glide never climbs above this (towers beyond are steered around)
+    glideGuide: 0.4,           // rad/s: hands-off, the glide turns gently until downtown is within ~50° of her heading
+    glideGuideNear: 260,       // m: … unless she is already this close to it
+    glideClimb: 7,             // m/s: the fastest she climbs while gliding (eased)
+    finaleEnd: 13              // s after the ascent starts: the end card (title at 8–10 s)
   },
 
   /* ---------- Palette --------------------------------------------------- */

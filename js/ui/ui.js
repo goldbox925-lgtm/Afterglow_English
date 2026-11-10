@@ -155,7 +155,6 @@ AG.UI = (function () {
     U.on('characterAsset', renderAssets);
 
     U.on('playstate', (pl) => { $('btnPlay').innerHTML = pl ? ICON.pause : ICON.play; $('btnPlay').title = pl ? 'Pause (Space)' : 'Resume (Space)'; document.body.classList.toggle('paused', !pl); });
-    U.on('finale', () => { setTimeout(() => { if (AG.Flight.finale) { document.body.classList.add('ended'); $('endCard').classList.add('show'); } }, 13000); });
     U.on('reset', () => { $('endCard').classList.remove('show'); document.body.classList.remove('ended'); hideFragMsg(); });
     U.on('fragment', showFragMsg);
     U.on('replay', () => { $('endCard').classList.remove('show'); document.body.classList.remove('ended'); hideFragMsg(); });
@@ -289,6 +288,12 @@ AG.UI = (function () {
     updateFragHud(st);
     updateFragGoal(st);
     updateFlightPad(st);
+    // the end card: on the game clock (S.finale = game seconds since the fifth fragment), so a
+    // pause holds it back; shown once the glide and the ascent (finaleEnd s) have played
+    const FC = C.flight;
+    if (st === 'AFTERGLOW' && AG.Flight.finale && S.finale >= FC.finaleGlide + FC.finaleEnd && !document.body.classList.contains('ended')) {
+      document.body.classList.add('ended'); $('endCard').classList.add('show');
+    }
     const tr = $('titleReveal');
     const showT = S.title > 0.02;
     if (showT !== tr.classList.contains('show')) tr.classList.toggle('show', showT);

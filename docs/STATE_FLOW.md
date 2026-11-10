@@ -15,7 +15,7 @@ NUMBNESS ─► FRACTURE ─► AWAKENING ─► RECLAIMING_SELF ─► AFTERGLO
 | 02 | FRACTURE | Cutscene `fracture` (3.2 s). | Click flickering windows to steady them. | `stabilised ≥ need.fragile` (4) | `advance('FRACTURE')` → AWAKENING |
 | 03 | AWAKENING | The light network is seeded from the pulse and the steadied windows. | Click dark buildings (glowing ring) within reach of a lit one. | `awakeningConnections ≥ need.awakening` (5) | `advance('AWAKENING')` → RECLAIMING_SELF |
 | 04 | RECLAIMING_SELF | Cutscene `stand` (8.4 s). | Drag between two lit buildings, or click one and then the other. | `cityLinks ≥ need.links` (5) | `advance('RECLAIMING_SELF')` → AFTERGLOW |
-| 05 | AFTERGLOW | Cutscene `liftoff` (4.8 s); flight and fragments reset. | Steer with ← → (or the mouse; a held arrow turns up to 55 % faster, for a controlled U-turn); level glide with no sinking; tap ↑ for a small lift (about 13 m), double-tap ↑ for a smooth bigger rise (about 45 m); hold ↑ to speed up (21 → 30 m/s, no height change); ↓ to descend (cancels a pending rise). On touch devices an on-screen pad (◀ ▶ ▲ ▼) does the same. Holding ↑ never ends the story. Fly within 20 m of each of the five fragments (`js/core/fragments.js`). | Fifth fragment collected → `Flight.enterLight()` → `Flight.finale` | End card after ~13 s → **Play again** → NUMBNESS |
+| 05 | AFTERGLOW | Cutscene `liftoff` (4.8 s); flight and fragments reset. | Steer with ← → (or the mouse; a held arrow turns up to 55 % faster, for a controlled U-turn); level glide with no sinking; tap ↑ for a small lift (about 13 m), double-tap ↑ for a smooth bigger rise (about 45 m); hold ↑ to speed up (21 → 30 m/s, no height change); ↓ to descend (cancels a pending rise). On touch devices an on-screen pad (◀ ▶ ▲ ▼) does the same. Holding ↑ never ends the story. Fly within 20 m of each of the five fragments (`js/core/fragments.js`). | Fifth fragment collected → `Flight.enterLight()` → `Flight.finale` | Glide (12 s) → ascent → end card 13 s into the ascent (game time) → **Play again** → NUMBNESS |
 
 ## Controls that act on the machine
 
@@ -81,7 +81,27 @@ How they work:
 - **Collection:** `p5.Vector.dist(fragment, her position) < 20 m`, each counted once. Collecting
   one plays a burst: the flower flares and dissolves while a ring expands (network-node shader,
   kind 5).
-- **Ending:** the fifth calls `AG.Flight.enterLight()`, the existing ending sequence.
+- **Ending:** the fifth calls `AG.Flight.enterLight()`, the existing ending sequence (see below).
+
+### Stage 05 ending (Phase 6)
+
+After the fifth fragment, `Flight.drift(dt, input)` runs instead of `Flight.update`. It counts
+`Flight.finaleT` in game time (it only runs while the story plays, so a pause freezes it), in
+two parts:
+
+| Part | Game time | Her movement (`js/core/flight.js`) | Camera (`js/core/camera.js` `finalePose`) |
+|---|---|---|---|
+| Glide | 0–12 s (`finaleGlide`) | Glides forward at 16 m/s (back-view flying pose G). Eases up to at least 160 m (above ~95 % of the roofs) at ≤ 7 m/s, never down, and climbs only for a tower right on her path (others are steered around). Steerable with the mouse / ← → (60 % of the free-flight turn). Hands off, she turns gently (0.4 rad/s) until downtown is within ~50° of her heading (~20° when she is far past the city's edge), so the panorama is the city. | Over the first ~7 s it eases back from the chase (≈ 5 m) to 16 m behind, 5 m above and 4 m to the side, fov 56 → 62, looking past her slightly down along her course. She stays about 10 % of the frame height, just below the centre. |
+| Ascent | from 12 s | The original drift: rises at up to 7 m/s while her forward speed eases to 2 m/s (levitating pose E). Still steerable (50 %). | The original pull-back, starting from the glide's position: over 12 s it eases round (shortest way) to the side away from the dawn, 19 m out and 3 m below her, fov 60 → 52, so she rises in front of the sun and is kept near the centre. |
+
+Story timings (`js/core/story.js`), counted from the start of the ascent unless noted:
+- Sun: 0–5 s. During the glide only a faint promise of it (≤ 0.25).
+- Title: 8–10 s. Veil: 9–11 s.
+- End card: 13 s (`finaleEnd`, `js/ui/ui.js`, on the game clock; it was a 13 s browser timer).
+- Dawn colour builds from the fifth fragment, slowly over the glide.
+- The air clears during the glide (fog density −55 %), so the restored city reads at a distance.
+
+Replay resets all of it (`Flight.reset`, `Camera.reset`, `Story.reset`).
 - **Placement:** chosen at the moment of the reveal from her current position and heading:
   about 100–120 m ahead, 18–40 m to one side (at most about 22° off her path), at her height
   (SELF-LOVE 25 m higher). The spot must be free air with an open straight path from her;

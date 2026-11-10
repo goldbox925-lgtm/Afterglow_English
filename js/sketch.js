@@ -115,7 +115,7 @@
       let litBuildings = 0;
       for (const b of world.info.buildings) { b.update(AG.Restoration); if (b.isLit()) litBuildings++; }
       if (entered && playing && F.state === 'AFTERGLOW' && !F.cinematic) {
-        if (AG.Flight.finale) AG.Flight.drift(dt); else AG.Flight.update(dt, input, true);
+        if (AG.Flight.finale) AG.Flight.drift(dt, input); else AG.Flight.update(dt, input, true);
       }
       // audio reactivity: Web Audio analyser bands → p5.js mapping & smoothing.
       // OFF → null, the story's own "no music" path (the original non-reactive look).

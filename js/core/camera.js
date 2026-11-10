@@ -16,7 +16,8 @@
                      suffers; it sinks below her and slowly orbits as she
                      lets go, then pulls back as she rises, so the city
                      falls away beneath a figure that stays readable.
-       finale    05  LIGHT: a slow pull-back with her still in frame
+       finale    05  LIGHT: a glide (pull-back to a wide view of the city, her
+                     still readable), then the slow pull-back of the ascent
      EXPLORE (01–04)  the viewer looks around from the vantage behind her:
                       drag = look, wheel = zoom, ← → ↑ ↓ = look. The mode never
                       changes on its own; a drag that starts on a light node
@@ -121,16 +122,33 @@ AG.Camera = (function () {
     return { pos: V.add(p, off), target, fov: U.lerp(36, 42, rise), flight: true, rate: swing < 1 ? 5 : 1.7, anchor: p.slice(), fs: F.state() };
   }
 
-  /* LIGHT: hold her in frame while the camera eases back and the sun takes over */
-  function finalePose(at) {
-    const F = AG.Flight;
-    if (finaleAt < 0) { finaleAt = at; finaleAnchor = V.sub(cur.pos, F.pos); finaleFwd = F.state().fwd.slice(); }
-    const k = U.easeInOut(U.clamp((at - finaleAt) / 12, 0, 1));
-    const p = F.pos;
-    const dir = V.norm(finaleAnchor), d0 = V.len(finaleAnchor);
-    const cam = V.add(p, V.add(V.scale(dir, d0 * (1 + 0.8 * k)), [0, -6 * k, 0]));
-    const sun = V.norm([0.55, 0.05, -0.83]);
-    return { pos: cam, target: V.lerp(V.add(p, [0, 0.2, 0]), V.add(cam, V.scale(sun, 600)), 0.06 + 0.12 * U.smooth(0.6, 1, k)), fov: 44, flight: true, rate: 1.2, anchor: p.slice() };
+  /* LIGHT (after the fifth fragment), on the flight's game clock (Flight.finaleT):
+     GLIDE  the camera eases back from the chase (≈ 5 m) to ≈ 16 m behind, 5 m above and a
+            little to the side of her, widens the lens and looks past her, slightly down along
+            her course: she stays readable (≈ 10 % of the frame height, just below the centre)
+            while the city below and the skyline ahead fill most of the picture.
+     ASCENT the original LIGHT pull-back, starting from wherever the glide left the camera: it
+            eases round (shortest way) to the side away from the dawn and a little below her,
+            so she rises in front of the sun with the city falling away beneath. She is kept
+            near the centre (the look point stays within a few metres of her).            */
+  const DAWN = V.norm([0.55, 0, -0.83]);              // the sky shader's dawn / sun direction, flat
+  function finalePose() {
+    const F = AG.Flight, FC = AG.CONFIG.flight, t = F.finaleT, p = F.pos, fs = F.state();
+    if (t < FC.finaleGlide) {
+      const k = U.easeInOut(U.clamp(t / (FC.finaleGlide * 0.6), 0, 1));      // the pull-back
+      const back = U.lerp(5.5, 16, k), up = U.lerp(1.0, 5, k), side = 4 * k;
+      const pos = V.add(V.add(V.sub(p, V.scale(fs.fwd, back)), [0, up, 0]), V.scale(fs.right, side));
+      const target = V.add(V.add(p, V.scale(fs.fwd, U.lerp(8, 80, k))), [0, -U.lerp(0, 12, k), 0]);
+      return { pos, target, fov: U.lerp(56, 62, k), flight: true, rate: 1.4, anchor: p.slice(), fs };
+    }
+    if (finaleAt < 0) { finaleAt = t; finaleAnchor = V.sub(cur.pos, p); finaleFwd = fs.fwd.slice(); }
+    const k = U.easeInOut(U.clamp((t - finaleAt) / 12, 0, 1));
+    const a0 = Math.atan2(finaleAnchor[0], finaleAnchor[2]), a1 = Math.atan2(-DAWN[0], -DAWN[2]);
+    const ang = a0 + Math.atan2(Math.sin(a1 - a0), Math.cos(a1 - a0)) * k;
+    const r = U.lerp(Math.hypot(finaleAnchor[0], finaleAnchor[2]), 19, k), h = U.lerp(finaleAnchor[1], -3, k);
+    const cam = V.add(p, [Math.sin(ang) * r, h, Math.cos(ang) * r]);
+    const target = V.add(V.add(p, [0, 0.2 + 1.5 * k, 0]), V.scale(DAWN, 4 * k));
+    return { pos: cam, target, fov: U.lerp(60, 52, k), flight: true, rate: 1.2, anchor: p.slice() };
   }
 
   /* ---------- EXPLORE (01–04) ---------- */
@@ -188,7 +206,7 @@ AG.Camera = (function () {
     const F = AG.FSM, cin = F.cinematic;
     if (cin) { const c = cinematicPose(cin); if (c) return c; }
     if (!(F.state === 'AFTERGLOW' && (AG.Flight.arc || AG.Flight.finale)) && arcOn) { arcOn = false; arcSide = -arcSide; }
-    if (F.state === 'AFTERGLOW') return AG.Flight.finale ? finalePose(at) : AG.Flight.arc ? ascensionPose(at) : chase();
+    if (F.state === 'AFTERGLOW') return AG.Flight.finale ? finalePose() : AG.Flight.arc ? ascensionPose(at) : chase();
     return explorePose(dt, input);
   }
 
