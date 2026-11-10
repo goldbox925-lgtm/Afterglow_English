@@ -79,6 +79,7 @@ AG.Flight = (function () {
     trail = []; for (let i = 0; i < 24; i++) trail.push(F.pos.slice());
     upHeld = 0; sinceUp = 99; cloudHit = false; pendingLift = 0; liftLeft = 0; lastTapAt = -1e9; steerHeld = 0; upDownAt = 0; upHeldT = 0;
     F.boosting = false; F.lifts = 0; F.doubleTaps = 0; F.finaleT = 0; F.gliding = false; F.finales = 0;
+    F.noFragments = false; F.assistTurn = 0; F.assistVy = 0; F.avoidOff = false; F.assistHold = false;   // Round 02 (js/garden/garden.js)
     resetMotion();
     if (AG.Fragments) AG.Fragments.reset();          // every flight starts with all five fragments in place
   }
@@ -133,6 +134,8 @@ AG.Flight = (function () {
     // radius. (The old test inflated a single point 40 m ahead by 7 m, so a passable street, or
     // flying parallel to a facade at her normal distance, counted as blocked and she turned
     // into the walls or back on herself.) She now turns only while she is heading into a building.
+    // Round 02: heading for the open doorway, nothing must turn her away from it
+    if (F.avoidOff) { F.avoidSide = 0; F.avoiding = false; return 0; }
     const m = FC.radius - 0.2, len = FC.probe + F.speed * 0.6, hero = boxes.find((b) => b.hero);
     const clearAlong = (yaw, L) => segmentClear(F.pos, V.add(F.pos, V.scale(heading(yaw), L)), m, hero);
     if (!F.arc && clearAlong(F.yaw, len) < 1) {
@@ -223,7 +226,8 @@ AG.Flight = (function () {
     let turn = steerTurn(FC, input, dt);
     // ---- near buildings: a gentle look-ahead turn and facade alignment, only when she is not
     //      being steered (the player's input always wins); collisions themselves slide (move) ----
-    if (!F.steering) turn += avoidTurn(FC, FC.avoidTurn, dt) + alignTurn(FC);
+    // (+ Round 02's gentle line-up with the doorway, assistTurn: 0 in Round 01)
+    if (!F.steering) turn += avoidTurn(FC, FC.avoidTurn, dt) + alignTurn(FC) + (F.assistTurn || 0);
     else { F.avoidSide = 0; F.avoiding = false; }
     F.yawRate = U.damp(F.yawRate, U.clamp(turn, -1.8, 1.8), 3.2, dt);
     F.yaw += F.yawRate * dt;
@@ -234,8 +238,8 @@ AG.Flight = (function () {
                 : U.damp(F.speed, boosting ? FC.boostMax : FC.cruise, FC.accel, dt);
     // vertical: a level glide by default; taps/double-taps add metres to climb (liftLeft), followed
     // with an eased vertical speed (≤ riseSpeed) so the rise never snaps; ↓ descends and cancels it
-    if (k.down) liftLeft = 0;
-    const targetVy = k.down ? -FC.descend : liftLeft > 0.05 ? Math.min(FC.riseSpeed, 2 + liftLeft * 1.3) : 0;
+    if (k.down || F.assistHold) liftLeft = 0;            // (assistHold: Round 02, lined up with the doorway)
+    const targetVy = k.down ? -FC.descend : liftLeft > 0.05 ? Math.min(FC.riseSpeed, 2 + liftLeft * 1.3) : (F.assistVy || 0);
     F.vy = U.damp(F.vy, targetVy, 2.4, dt);
     if (F.vy > 0) liftLeft = Math.max(0, liftLeft - F.vy * dt);
     move(dt, FC);
@@ -248,7 +252,8 @@ AG.Flight = (function () {
     if (!cloudHit && F.pos[1] > FC.finaleAltitude - 110) { cloudHit = true; AG.U.emit('cloud'); }
     // the light is entered by collecting the fifth fragment (distance check in AG.Fragments)
     // (this update runs only while she is controllable, so the 6 s / 10 s reveal timers count active flight only)
-    if (!F.finale && AG.Fragments && AG.Fragments.update(F.pos, AG.FSM.animTime, dt)) enterLight();
+    // (Round 02's flight to the doorway has no fragments: noFragments)
+    if (!F.finale && !F.noFragments && AG.Fragments && AG.Fragments.update(F.pos, AG.FSM.animTime, dt)) enterLight();
     // ---- trail history ----
     trailClock -= dt;
     if (trailClock <= 0) { trail.unshift(F.pos.slice()); trail.length = 24; trailClock = 0.05; }

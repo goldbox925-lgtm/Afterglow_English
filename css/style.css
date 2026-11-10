@@ -320,3 +320,26 @@ body.stage-find #stage canvas, body.stage-restore #stage canvas { cursor: crossh
 body.cinematic #hintRing, body.cinematic #hintArrow { opacity: 0 !important; }
 #timeText { min-width: 9em; text-align: right; letter-spacing: 0.12em; }
 body.entered:not(.flying) #stage canvas { cursor: crosshair; }
+
+/* ---------- Round 02 · the Memory Garden (js/garden/garden.js) ---------- */
+.endButtons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.enter.ghost { border-color: rgba(255, 255, 255, 0.28); background: transparent; }
+#gardenVeil { position: fixed; inset: 0; z-index: 13; background: #fff6f8; opacity: 0; pointer-events: none; }
+#gardenUI { position: fixed; inset: 0; z-index: 12; pointer-events: none; opacity: 0; transition: opacity 0.8s; }
+#gardenUI.show { opacity: 1; }
+#gardenUI.show #gardenButtons button { pointer-events: auto; }
+#gardenPanel { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); text-align: center;
+  padding: 10px 16px; border-radius: 14px; background: rgba(20, 10, 32, 0.45); border: 1px solid rgba(255, 255, 255, 0.12); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#gardenPanel .g-title { margin: 0 0 4px; font-size: 12px; letter-spacing: 0.32em; color: #fff; text-shadow: 0 0 10px rgba(255, 120, 200, 0.55); }
+#gardenPanel .g-text { margin: 0; font-size: 12.5px; line-height: 1.5; color: rgba(243, 233, 255, 0.86); }
+#gardenButtons { position: absolute; right: 16px; bottom: 84px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100vw - 32px); }
+#gardenButtons button { font: inherit; font-size: 11px; letter-spacing: 0.14em; color: #f3e9ff; background: rgba(20, 10, 32, 0.55); cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 14px; padding: 8px 13px; }
+#gardenButtons button:hover { border-color: rgba(255, 122, 208, 0.8); }
+#gardenMeter { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); width: min(320px, calc(100vw - 32px)); text-align: center; font-size: 12px; letter-spacing: 0.18em; color: #f3e9ff; }
+#gardenMeter .track { height: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); margin-top: 6px; overflow: hidden; }
+#gardenBar { height: 100%; width: 0; background: linear-gradient(90deg, #9f87ff, #ff7ad0, #ffc56e); }
+@media (max-width: 860px) {
+  #gardenButtons { left: 16px; right: 16px; bottom: 130px; justify-content: center; }
+  #gardenMeter { bottom: 84px; }
+}

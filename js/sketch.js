@@ -46,6 +46,7 @@
       AG.Restoration.init(p, w.info, vantage);
       AG.Interactions.build(w.info, AG.Restoration);
       AG.Camera.setInfo(w.info);
+      AG.Garden.setWorld(w.info);              // Round 02: the doorway is chosen in this city when it opens
       perf.warm = 0;
       generating = false;
       console.info('[AFTERGLOW] city seed', seed, JSON.stringify(w.info.stats), 'nodes', AG.Interactions.nodes.length, 'progress buildings', AG.Restoration.buildingsTotal, 'total', Math.round(performance.now() - t0), 'ms');
@@ -77,6 +78,7 @@
       AG.LightParticles.init(p);
       AG.ScreenWords.init(p);
       AG.Story.bindEvents();
+      AG.Garden.init(p);
       AG.UI.setLoading('Generating the city…', false);
       AG.CharacterAssets.load(p, 'A');
       setTimeout(() => {
@@ -97,6 +99,7 @@
     p.windowResized = function () {
       p.resizeCanvas(window.innerWidth, window.innerHeight);
       AG.Renderer.resize();
+      AG.Garden.resize();
       perf.warm = 0;
     };
 
@@ -118,7 +121,8 @@
       let litBuildings = 0;
       for (const b of world.info.buildings) { b.update(AG.Restoration); if (b.isLit()) litBuildings++; }
       if (entered && playing && F.state === 'AFTERGLOW' && !F.cinematic) {
-        if (AG.Flight.finale) AG.Flight.drift(dt, input); else AG.Flight.update(dt, input, true);
+        if (AG.Garden.isActive()) AG.Garden.update(dt, input);     // Round 02: to the doorway, through it, inside
+        else if (AG.Flight.finale) AG.Flight.drift(dt, input); else AG.Flight.update(dt, input, true);
       }
       // audio reactivity: Web Audio analyser bands → p5.js mapping & smoothing.
       // OFF → null, the story's own "no music" path (the original non-reactive look).
@@ -143,7 +147,9 @@
         white = U.smooth(1.05, 0.55, q) * 0.3 * S.cloudGlow;      // a thin veil: she stays visible inside the cloud
       }
       AG.Renderer.white = U.damp(AG.Renderer.white || 0, white, 4, dt);
-      AG.Renderer.render(S, cam, F.animTime, rt, CH, F.animTime);
+      // Round 02: inside the doorway the Memory Garden replaces the city image
+      if (AG.Garden.drawsScene()) AG.Garden.draw(playing ? dt : 0);
+      else AG.Renderer.render(S, cam, F.animTime, rt, CH, F.animTime);
       AG.UI.update(dt, S, input);
       adapt(dt);
       const IA = AG.Interactions, R = AG.Restoration;

@@ -510,6 +510,24 @@ AG.Renderer = (function () {
     }
   }
 
+  /* Round 02: the doorway of light on its building and the beacon above it (js/garden/garden.js;
+     nothing is drawn in Round 01). Additive; the doorway is depth-tested, the beacon is not. */
+  function drawPortal(F) {
+    const P = AG.Garden && AG.Garden.portalDraw();
+    if (!P || !AG.SHADERS.portal) return;
+    if (!SH.portal) SH.portal = makeShader(AG.SHADERS.portal);
+    const sh = SH.portal;
+    p.blendMode(p.ADD); gl.depthMask(false); p.shader(sh); common(sh, F);
+    sh.setUniform('uOpen', P.open); sh.setUniform('uNear', P.near); sh.setUniform('uN', P.n);
+    gl.enable(gl.DEPTH_TEST);
+    sh.setUniform('uKind', 0); sh.setUniform('uC', P.c); sh.setUniform('uSize', [P.w / 2, P.h / 2]);
+    p.model(quad);
+    gl.disable(gl.DEPTH_TEST);
+    sh.setUniform('uKind', 1); sh.setUniform('uC', P.beacon); sh.setUniform('uSize', [9, 320]);
+    p.model(quad);
+    gl.enable(gl.DEPTH_TEST);
+  }
+
   function opaque() { p.blendMode(p.BLEND); gl.enable(gl.DEPTH_TEST); gl.depthMask(true); }
   function additive() { p.blendMode(p.ADD); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); }
 
@@ -564,6 +582,7 @@ AG.Renderer = (function () {
     if (!D.noNeon) drawNeon(F, S, world.neon);
     drawSmoke(F, S);
     drawNetwork(F, S);
+    drawPortal(F);
     additive();
     if (!cam.split) {
       drawNeon(F, S, world.heroNeon);

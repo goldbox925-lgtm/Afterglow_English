@@ -7,7 +7,7 @@
   <meta name="description" content="An interactive story about a broken heart, a city restored, and rebirth.">
   <meta name="theme-color" content="#05060c">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2305060c'/%3E%3Crect x='7' y='9' width='5' height='17' fill='%23ff2a9e'/%3E%3Crect x='14' y='4' width='5' height='22' fill='%2322e8ff'/%3E%3Crect x='21' y='12' width='4' height='14' fill='%238b45ff'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css?v=20261110p6">
+  <link rel="stylesheet" href="css/style.css?v=r2g1">
 </head>
 <body>
   <div id="stage"></div>
@@ -140,7 +140,21 @@
   <section id="endCard">
     <p class="eyebrow">AFTERGLOW</p>
     <p class="quote">Her heart was broken.<br>But she rose again.</p>
-    <button id="endReplay" class="enter small">Play again</button>
+    <div class="endButtons">
+      <button id="endGarden" class="enter small">Enter the Memory Garden</button>
+      <button id="endReplay" class="enter small ghost">Play again</button>
+    </div>
+  </section>
+
+  <!-- ===== Round 02 · the Memory Garden (js/garden/garden.js) ===== -->
+  <div id="gardenVeil" aria-hidden="true"></div>
+  <section id="gardenUI" aria-live="polite">
+    <div id="gardenPanel">
+      <p class="g-title">THE MEMORY GARDEN</p>
+      <p class="g-text"><b>Click</b> the heart of the flower to awaken it · <b>drag outward</b> to unfold it · drag elsewhere to look around</p>
+    </div>
+    <div id="gardenButtons"><button id="gardenReset" type="button">CLOSE THE BUD</button><button id="gardenBack" type="button">BACK TO THE CITY</button></div>
+    <div id="gardenMeter"><span id="gardenStage">Closed bud</span> · <span id="gardenPct">0%</span><div class="track"><div id="gardenBar"></div></div></div>
   </section>
 
   <noscript><p class="nojs">AFTERGLOW needs JavaScript and WebGL 2.</p></noscript>
@@ -167,19 +181,24 @@
   <script src="js/core/restoration.js?v=20261022asc"></script>
   <script src="js/core/collision.js?v=20261111c2"></script>
   <script src="js/core/fragments.js?v=20261110p7"></script>
-  <script src="js/core/flight.js?v=20261111u1"></script>
+  <script src="js/core/flight.js?v=r2g2"></script>
   <script src="js/character/characterDirector.js?v=20261110p14"></script>
   <script src="js/fx/screenWords.js?v=20261110b1"></script>
   <script src="js/fx/lightParticles.js?v=20261110t10"></script>
   <script src="js/core/interactions.js?v=20261110phase3f"></script>
-  <script src="js/core/story.js?v=20261111t1"></script>
+  <script src="js/core/story.js?v=r2g1"></script>
   <script src="js/core/camera.js?v=20261111c1"></script>
   <script src="js/audio/mic.js?v=20261110react2"></script>
   <script src="js/audio/score.js?v=20261022asc"></script>
   <script src="js/audio/audio.js?v=20261110p4hud"></script>
   <script src="js/audio/reactivity.js?v=20261110react6"></script>
-  <script src="js/render/renderer.js?v=20261110w1"></script>
-  <script src="js/ui/ui.js?v=20261110p14"></script>
-  <script src="js/sketch.js?v=20261111c1"></script>
+  <script src="js/shaders/portal.glsl.js?v=r2g2"></script>
+  <script src="js/shaders/flower.glsl.js?v=r2g1"></script>
+  <script src="js/garden/flower.js?v=r2g1"></script>
+  <script src="js/garden/gardenScene.js?v=r2g2"></script>
+  <script src="js/garden/garden.js?v=r2g2"></script>
+  <script src="js/render/renderer.js?v=r2g1"></script>
+  <script src="js/ui/ui.js?v=r2g1"></script>
+  <script src="js/sketch.js?v=r2g1"></script>
 </body>
 </html>

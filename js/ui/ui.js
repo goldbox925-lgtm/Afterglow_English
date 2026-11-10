@@ -25,7 +25,8 @@ AG.UI = (function () {
   let fragBuilt = false, fragKey = '', fragMsgTimer = null;
   function updateFragHud(st) {
     const FR = AG.Fragments, hud = $('fragHud'), body = document.body;
-    const show = !!(FR && FR.ready) && st === 'AFTERGLOW' && body.classList.contains('entered') && !body.classList.contains('ended') && !AG.FSM.cinematic;
+    const show = !!(FR && FR.ready) && st === 'AFTERGLOW' && body.classList.contains('entered') && !body.classList.contains('ended') && !AG.FSM.cinematic
+      && !body.classList.contains('garden');                     // Round 02 has no fragments
     hud.classList.toggle('show', show);
     if (!FR || !FR.ready) return;
     if (!fragBuilt) {
@@ -64,8 +65,12 @@ AG.UI = (function () {
   /* the persistent stage 05 goal: below the stage hint card (or the top bar), until 5/5 */
   function updateFragGoal(st) {
     const g = $('fragGoal'), FR = AG.Fragments, body = document.body;
-    const show = !!(FR && FR.ready) && st === 'AFTERGLOW' && body.classList.contains('entered') && !body.classList.contains('ended')
-      && !AG.FSM.cinematic && !AG.Flight.finale && FR.collected < FR.list.length;
+    // Round 02, on the way to the doorway: the same pill carries the garden's goal
+    const garden = !!AG.Garden && AG.Garden.phase === 'approach';
+    const show = garden || (!!(FR && FR.ready) && st === 'AFTERGLOW' && body.classList.contains('entered') && !body.classList.contains('ended')
+      && !AG.FSM.cinematic && !AG.Flight.finale && FR.collected < FR.list.length && !body.classList.contains('garden'));
+    const text = garden ? 'FLY THROUGH THE DOORWAY OF LIGHT' : 'COLLECT ALL FIVE FRAGMENTS';
+    if (g.textContent !== text) g.textContent = text;
     g.classList.toggle('show', show);
     if (!show) return;
     const panel = $('stagePanel'), barBottom = $('brand').getBoundingClientRect().bottom;
@@ -90,7 +95,9 @@ AG.UI = (function () {
   }
   function updateFlightPad(st) {
     const pad = $('flightPad'), F = AG.FSM;
-    const show = st === 'AFTERGLOW' && document.body.classList.contains('entered') && !F.cinematic && !AG.Flight.finale && F.playing && isTouch();
+    const show = st === 'AFTERGLOW' && document.body.classList.contains('entered') && !F.cinematic && !AG.Flight.finale && F.playing && isTouch()
+      && !(AG.Garden && AG.Garden.isActive() && AG.Garden.phase !== 'approach');      // not inside the garden
+
     if (show === pad.classList.contains('show')) return;
     pad.classList.toggle('show', show);
     if (!show) document.querySelectorAll('#flightPad .fp-btn').forEach((b) => { if (b.classList.contains('on')) { AG.Flight.press(b.dataset.key, false); b.classList.remove('on'); } });
@@ -196,6 +203,9 @@ AG.UI = (function () {
     const F = AG.FSM, IA = AG.Interactions;
     if (F.cinematic) return { title: 'WATCH THE SCENE', text: "You'll be able to interact soon." };
     const def = C.states.find((s) => s.id === st);
+    if (st === 'AFTERGLOW' && AG.Garden && AG.Garden.isActive()) {
+      return AG.Garden.phase === 'approach' ? { title: 'THE MEMORY GARDEN', text: 'A doorway of light has opened. Fly through it · ← → steer · tap ↑ to rise · ↓ to descend.' } : null;
+    }
     if (st === 'AFTERGLOW') {
       if (AG.Flight.finale) return null;
       if (F.mode === 'ASCENSION') return null;
@@ -220,7 +230,7 @@ AG.UI = (function () {
     let prog = st === 'AFTERGLOW' ? 0.8 + 0.2 * AG.Flight.asc : Math.min(0.8, idx * 0.1 + 0.5 * U.clamp(AG.Interactions.progress / NC.toAfterglow, 0, 1));
     $('progress').style.width = (prog * 100).toFixed(1) + '%';
     const def = C.states[idx];
-    $('timeText').textContent = st === 'AFTERGLOW' && AG.Flight.arc ? AG.Flight.phase : AG.Flight.finale ? 'LIGHT' : def.title;
+    $('timeText').textContent = AG.Garden && AG.Garden.isActive() ? 'MEMORY GARDEN' : st === 'AFTERGLOW' && AG.Flight.arc ? AG.Flight.phase : AG.Flight.finale ? 'LIGHT' : def.title;
     if (S.hint !== lastHint) { lastHint = S.hint; $('hint').textContent = S.hint; $('hint').classList.toggle('show', !!S.hint); }
     document.body.classList.toggle('flying', st === 'AFTERGLOW');
     document.body.classList.toggle('cinematic', !!F.cinematic);
@@ -245,6 +255,12 @@ AG.UI = (function () {
       else if (b && !b.on) arrow = b;
       else if (!b && IA.beacon) arrow = { behind: true };
     } else if ((st === 'FRACTURE' || st === 'AWAKENING' || st === 'RECLAIMING_SELF') && IA.hint && !F.cinematic) ring = IA.hint;
+    else if (st === 'AFTERGLOW' && AG.Garden && AG.Garden.target()) {
+      // Round 02: the same edge arrow points to the doorway while it is off screen
+      const P = AG.Garden.target(), cam = AG.Camera.state, sp = IA.project(P, cam);
+      if (!sp) { const V = U.v3, right = V.cross(V.norm(V.sub(cam.target, cam.pos)), [0, 1, 0]); arrow = { nx: V.dot(V.sub(P, cam.pos), right) >= 0 ? 1 : -1, ny: 0 }; }
+      else if (!sp.on) arrow = sp;
+    }
     else if (st === 'AFTERGLOW' && !F.cinematic && !AG.Flight.finale && AG.Fragments && AG.Fragments.active()) {
       // stage 05: the existing edge arrow points to the revealed fragment while it is off screen
       const fr = AG.Fragments.active(), P = [fr.pos.x, fr.pos.y, fr.pos.z], cam = AG.Camera.state, sp = IA.project(P, cam);
@@ -291,9 +307,12 @@ AG.UI = (function () {
     // the end card: on the game clock (S.finale = game seconds since the fifth fragment), so a
     // pause holds it back; shown once the glide and the ascent (finaleEnd s) have played
     const FC = C.flight;
-    if (st === 'AFTERGLOW' && AG.Flight.finale && S.finale >= FC.finaleGlide + FC.finaleEnd && !document.body.classList.contains('ended')) {
+    if (st === 'AFTERGLOW' && AG.Flight.finale && S.finale >= FC.finaleGlide + FC.finaleEnd && !document.body.classList.contains('ended') && !(AG.Garden && AG.Garden.isActive())) {
       document.body.classList.add('ended'); $('endCard').classList.add('show');
     }
+    // Round 02: the doorway's white light (entering / leaving the garden)
+    const gv = $('gardenVeil'), wv = AG.Garden ? AG.Garden.white.toFixed(3) : '0.000';
+    if (gv && gv.dataset.o !== wv) { gv.dataset.o = wv; gv.style.opacity = wv; }
     const tr = $('titleReveal');
     const showT = S.title > 0.02;
     if (showT !== tr.classList.contains('show')) tr.classList.toggle('show', showT);

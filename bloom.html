@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Memory Garden · Bloom preview</title>
+  <meta name="description" content="AFTERGLOW Round 02 development preview: the Interactive Bloom flower.">
+  <style>
+    html, body { margin: 0; height: 100%; background: #0d0714; overflow: hidden; font-family: "Helvetica Neue", "Inter", system-ui, sans-serif; color: #f3e9ff; }
+    canvas { display: block; touch-action: none; }
+    #panel { position: fixed; left: 16px; top: 16px; max-width: min(360px, calc(100vw - 32px)); padding: 12px 14px; border-radius: 12px;
+      background: rgba(20, 10, 32, 0.55); border: 1px solid rgba(255, 255, 255, 0.12); backdrop-filter: blur(6px); font-size: 13px; line-height: 1.45; }
+    #panel h1 { margin: 0 0 2px; font-size: 12px; letter-spacing: 0.32em; font-weight: 500; }
+    #panel .sub { opacity: 0.7; font-size: 11px; letter-spacing: 0.12em; margin-bottom: 8px; }
+    #panel ul { margin: 0; padding-left: 16px; opacity: 0.85; }
+    #meter { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); width: min(360px, calc(100vw - 32px)); text-align: center; font-size: 12px; letter-spacing: 0.18em; }
+    #meter .track { height: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); margin-top: 6px; overflow: hidden; }
+    #bloomBar { height: 100%; width: 0; background: linear-gradient(90deg, #9f87ff, #ff7ad0, #ffc56e); }
+    #bloomPct { font-variant-numeric: tabular-nums; }
+    #controls { position: fixed; right: 16px; top: 16px; display: flex; gap: 8px; }
+    #controls button, #controls a { font: inherit; font-size: 11px; letter-spacing: 0.14em; color: #f3e9ff; background: rgba(20, 10, 32, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 14px; padding: 7px 12px; cursor: pointer; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <h1>MEMORY GARDEN</h1>
+    <div class="sub">ROUND 02 · INTERACTIVE BLOOM · DEV PREVIEW</div>
+    <ul>
+      <li><b>Click</b> the heart of the flower to awaken it</li>
+      <li><b>Drag outward</b> from it to unfold the petals</li>
+      <li>Drag elsewhere to orbit · wheel to zoom</li>
+      <li><b>R</b> or Reset: back to the closed bud</li>
+    </ul>
+  </div>
+  <div id="controls"><button id="btnReset" type="button">RESET</button><a href="index.html">GAME</a></div>
+  <div id="meter"><span id="bloomStage">Closed bud</span> · <span id="bloomPct">0%</span><div class="track"><div id="bloomBar"></div></div></div>
+
+  <script src="lib/p5.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/core/util.js"></script>
+  <script src="js/shaders/common.glsl.js"></script>
+  <script src="js/shaders/post.glsl.js"></script>
+  <script src="js/shaders/flower.glsl.js?v=16"></script>
+  <script src="js/city/geometryBuilder.js"></script>
+  <script src="js/fx/lightParticles.js"></script>
+  <script src="js/garden/flower.js?v=11"></script>
+  <script src="js/garden/gardenScene.js?v=2"></script>
+  <script src="js/garden/bloomPreview.js?v=11"></script>
+</body>
+</html>

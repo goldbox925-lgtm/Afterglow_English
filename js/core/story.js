@@ -39,6 +39,8 @@ AG.Story = (function () {
     U.on('jump', () => { fastMood = 1; });
     U.on('reset', reset);
     U.on('finale', () => { finaleAt = AG.FSM.animTime; });
+    // Round 02 (js/garden/garden.js): flying back into the city ends the finale's light (veil, title, sunrise)
+    U.on('gardenPhase', (e) => { if (e.phase === 'approach') finaleAt = -1; });
   }
 
   const lerp3 = (a, b, k) => [U.lerp(a[0], b[0], k), U.lerp(a[1], b[1], k), U.lerp(a[2], b[2], k)];

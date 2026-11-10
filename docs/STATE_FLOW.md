@@ -15,7 +15,7 @@ NUMBNESS ─► FRACTURE ─► AWAKENING ─► RECLAIMING_SELF ─► AFTERGLO
 | 02 | FRACTURE | Cutscene `fracture` (3.2 s). | Click flickering windows to steady them. | `stabilised ≥ need.fragile` (4) | `advance('FRACTURE')` → AWAKENING |
 | 03 | AWAKENING | The light network is seeded from the pulse and the steadied windows. | Click dark buildings (glowing ring) within reach of a lit one. | `awakeningConnections ≥ need.awakening` (5) | `advance('AWAKENING')` → RECLAIMING_SELF |
 | 04 | RECLAIMING_SELF | Cutscene `stand` (8.4 s). | Drag between two lit buildings, or click one and then the other. | `cityLinks ≥ need.links` (5) | `advance('RECLAIMING_SELF')` → AFTERGLOW |
-| 05 | AFTERGLOW | Cutscene `liftoff` (4.8 s); flight and fragments reset. | Steer with ← → (or the mouse; a held arrow turns up to 55 % faster, for a controlled U-turn); level glide with no sinking; tap ↑ for a small lift (about 13 m), double-tap ↑ for a smooth bigger rise (about 45 m); hold ↑ to speed up (21 → 30 m/s, no height change); ↓ to descend (cancels a pending rise). On touch devices an on-screen pad (◀ ▶ ▲ ▼) does the same. Holding ↑ never ends the story. Fly within 20 m of each of the five fragments (`js/core/fragments.js`). | Fifth fragment collected → `Flight.enterLight()` → `Flight.finale` | Glide (12 s) → ascent → end card 13 s into the ascent (game time) → **Play again** → NUMBNESS |
+| 05 | AFTERGLOW | Cutscene `liftoff` (4.8 s); flight and fragments reset. | Steer with ← → (or the mouse; a held arrow turns up to 55 % faster, for a controlled U-turn); level glide with no sinking; tap ↑ for a small lift (about 13 m), double-tap ↑ for a smooth bigger rise (about 45 m); hold ↑ to speed up (21 → 30 m/s, no height change); ↓ to descend (cancels a pending rise). On touch devices an on-screen pad (◀ ▶ ▲ ▼) does the same. Holding ↑ never ends the story. Fly within 20 m of each of the five fragments (`js/core/fragments.js`). | Fifth fragment collected → `Flight.enterLight()` → `Flight.finale` | Glide (12 s) → ascent → end card 13 s into the ascent (game time) → **Play again** → NUMBNESS, or **Enter the Memory Garden** → Round 02 (`js/garden/garden.js`; the state stays AFTERGLOW) |
 
 ## Controls that act on the machine
 
@@ -249,7 +249,8 @@ scenes on her roof and only the look-around camera moves, so these changes leave
   (14 /s) when a building cuts the view and lengthens slowly (2.2 /s) when it clears.
 - Scripted shots (lift-off, the stage 04 close-ups, the finale) are unchanged.
 
-**Round 02 (prepared, not used):** a building box may set `solid: false`, or
+**Round 02 (used by the Memory Garden's doorway, `js/garden/garden.js`; see
+`docs/ROUND02_BLOOM.md`):** a building box may set `solid: false`, or
 `portals: [{ c, n, w, h, open }]`. Contacts on an open portal's rectangle (on the face whose
 normal matches `n`) are ignored, so she can fly in; the rest of the building stays solid.
 `AG.Collision.passable()` is the single place to extend this (for example to hand over to an
