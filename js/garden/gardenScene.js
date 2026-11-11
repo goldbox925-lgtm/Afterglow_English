@@ -25,7 +25,7 @@ AG.GardenScene = {
     const U = AG.U;
     const SH = {}; let gl, quad, petalGeo, domeGeo, sprGeo, stamGeo, discGeo, sceneFB, bA, bB, ready = false;
     // the default view shows the room round the flower (wider, lower, a little further back)
-    const cam = { yaw: 0.55, pitch: 0.15, dist: 18, target: [0, 3.6, 0], fov: 52 };
+    const cam = { yaw: 0.55, pitch: 0.08, dist: 15.5, target: [0, 4.2, 0], fov: 58 };
     const view = { eye: [0, 0, 0], V: null, P: null };
     // (the game's garden flower is larger, 2.6, so it holds the atrium; the preview keeps 2)
     const flower = AG.BloomFlower.create(p, { center: [0, 0, 0], scale: (o && o.scale) || 2 });
@@ -142,7 +142,7 @@ AG.GardenScene = {
     }
     function up() { if (mode === 'flower') flower.pointerUp(); mode = null; }
     function wheel(d) { cam.dist = p.constrain(cam.dist * Math.exp(d * 0.001), 6, 20); }   // (≤ 20 m: inside the atrium's glass, r = 24 m)
-    function resetView() { cam.yaw = 0.55; cam.pitch = 0.15; cam.dist = 18; mode = null; }
+    function resetView() { cam.yaw = 0.55; cam.pitch = 0.08; cam.dist = 15.5; mode = null; }
 
     /* the flower's own origin in p5's transform stack (shared by the receptacle and the petals):
        reset → its base → p.scale (growth / click swell / breathing / 100 % pulse, js/garden/flower.js

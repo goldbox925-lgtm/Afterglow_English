@@ -118,8 +118,8 @@ polling.
 **Environment upgrade, Part A (as built): the glass atrium** (`js/garden/atrium.js`,
 `js/shaders/atrium.glsl.js`).
 
-*Geometry.* Real 3D meshes, built once with `AG.GeometryBuilder` (about 76 k vertices in 5
-meshes, `p.randomSeed` for repeatable variation):
+*Geometry.* Real 3D meshes, built once with `AG.GeometryBuilder` (about 102 k vertices in 5
+meshes after the tuning pass, `p.randomSeed` for repeatable variation):
 - **Glass hall:** 24 m radius, 36 facets × 7 bands up to 28 m, then a ribbed glass dome to 44 m
   with an oculus.
 - **Metal:** mullions, ring beams, 12 dome ribs and dome rings.
@@ -128,8 +128,9 @@ meshes, `p.randomSeed` for repeatable variation):
 - **Stepped pearl platform:** 3 steps under the flower, with gold edge strips.
 - **Two curved walkways:** at 9 m and 17 m, with rails and under-edge light.
 - **8 planters:** crystal leaves and blossom spikes.
-- **88 hanging vines with wisteria clusters:** from the walkways and the dome rim (paths shaped
-  with `p.noise`, lengths from `p.random`).
+- **126 hanging vines with lush wisteria cones:** three blossoms per segment, fuller toward the
+  middle of each cluster, from the walkways and the dome rim (paths shaped with `p.noise`, lengths
+  from `p.random`).
 - **The city beyond the glass:** the REAL Round 01 buildings round the doorway tower (1,165 of
   them, from the city's own collision boxes), in the city's own axes. The garden's origin is the
   doorway building's centre at the doorway's floor. Towers closer than 60 m are left out so the
@@ -162,10 +163,19 @@ meshes, `p.randomSeed` for repeatable variation):
 *p5 drawing:* 14 petals drift down (`p5.Vector` + `p.noise` breeze), drawn as bezier outlines,
 turning (`p.rotate`) and tumbling (`p.scale` on one axis).
 
+*Tuning pass (toward the reference):*
+- **Brighter room:** a brighter ambient, gold-white light strips on every mullion, and a stronger
+  warm light from the flower.
+- **Glowing dais:** the pearl top glows gold round the flower, with an inner ring of light.
+- **Floor:** a stronger mirror (58–92 % reflective) and brighter inlays.
+- **City:** lighter glass towers with more lit windows and less haze.
+- **Glass and wisteria:** more glass sheen, and fuller wisteria.
+- **Camera:** fov 58° at 15.5 m, a lower pitch looking slightly up into the room.
+
 *Scale and camera:*
 - The game's flower is now 2.6 (2 in the preview), and her hover ring, keep-out sphere and
   height scale with it.
-- Default camera: fov 52°, 18 m, a low pitch that shows the room; zoom up to 20 m (inside the
+- Default camera: fov 58°, 15.5 m, a low pitch that shows the room; zoom up to 20 m (inside the
   glass).
 
 *Performance:* about 5.3 ms CPU per garden frame (forced redraws, everything on). All meshes are

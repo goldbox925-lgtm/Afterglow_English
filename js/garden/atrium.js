@@ -67,7 +67,7 @@ AG.Atrium = {
         }
         // the mullion at this facet edge; a light strip on its inner face on every third one
         beam(S, ring(R - 0.2, FL, a0), ring(R - 0.2, WALL, a0), 0.34, 0.5, metal(false));
-        if (i % 2 === 0) beam(S, ring(R - 0.5, FL + 0.2, a0), ring(R - 0.5, WALL - 0.2, a0), 0.06, 0.06, metal(true));
+        beam(S, ring(R - 0.5, FL + 0.2, a0), ring(R - 0.5, WALL - 0.2, a0), 0.06, 0.06, metal(true));
         // ring beams at every band edge, and the cove light at the floor
         for (let j = 0; j <= ROWS; j++) { const y = FL + j * bandH; beam(S, ring(R - 0.2, y, a0), ring(R - 0.2, y, a1), 0.22, 0.32, metal(false)); }
         beam(S, ring(R - 0.6, FL + 0.08, a0), ring(R - 0.6, FL + 0.08, a1), 0.08, 0.08, metal(true));
@@ -164,13 +164,13 @@ AG.Atrium = {
           const q = V3.add(V3.add(top, [0, -len * t, 0]), off);
           ribbon(P, prev, q, 0.05, [0, prevAlong, ph, hue], [0, t, ph, hue]);
           // wisteria: blossoms crowd the lower part, fuller toward the middle of the cluster
-          if (t > 0.25) for (let k = 0; k < 2; k++) blossom(P, V3.add(q, [p.random(-0.18, 0.18), p.random(-0.15, 0.15), p.random(-0.18, 0.18)]), 0.16 + 0.26 * Math.sin(Math.PI * Math.min(1, (t - 0.2) * 1.2)), 1, t, ph, (hue + k * 0.15) % 1);
+          if (t > 0.22) for (let k = 0; k < 3; k++) blossom(P, V3.add(q, [p.random(-0.28, 0.28), p.random(-0.25, 0.25), p.random(-0.28, 0.28)]), 0.24 + 0.36 * Math.sin(Math.PI * Math.min(1, (t - 0.15) * 1.15)), 1, t, ph, (hue + k * 0.12) % 1);
           prev = q; prevAlong = t;
         }
         strands++;
       };
       for (const [y, aS, aE] of walks) for (let a = aS; a < aE; a += 0.11) if (p.random() < 0.7) hang(ring(17.7, y - 0.55, a + p.random(-0.03, 0.03)), p.random(2.5, 6.5));
-      for (let a = 0; a < Math.PI * 2; a += 0.09) if (p.random() < 0.6) hang(ring(R - 1.0, WALL - 0.4, a), p.random(4, 10));
+      for (let a = 0; a < Math.PI * 2; a += 0.065) if (p.random() < 0.85) hang(ring(R - 1.0 - p.random(0, 1.5), WALL - 0.4, a), p.random(5, 12));
       // ---- the city round the tower, from the city's own data ----
       const O = opts.origin;
       let nb = 0;
@@ -226,7 +226,7 @@ AG.Atrium = {
       A.wind = [(p.noise(t * 0.08, 1.7) - 0.5) * 0.9, (p.noise(t * 0.08, 9.3) - 0.5) * 0.9];
       // the architecture's light shifts from violet toward pink and gold as she comes close
       const k = p.constrain(p.map(prox, 0.2, 1, 0, 1), 0, 1);
-      A.strip = rgb(p.lerpColor(p.lerpColor(COL.violet, COL.cyan, 0.25), p.lerpColor(COL.pink, COL.gold, 0.45), k));
+      A.strip = rgb(p.lerpColor(p.lerpColor(COL.lav, COL.gold, 0.35), p.lerpColor(COL.pink, COL.gold, 0.6), k));
       A.inlay = rgb(p.lerpColor(COL.lav, COL.gold, k * 0.7));
       A.pool = p.lerp(A.pool || 6, p.map(prox, 0, 1, 6, 12), 1 - Math.exp(-2 * dt));
       // pollen: a noise flow field, rising over the flower, drawn toward her as she comes close
@@ -270,7 +270,7 @@ AG.Atrium = {
     }
     function drawSolid(vw, t, s) {
       const sh = shaders(); p.shader(sh.solid); common(sh.solid, vw, t);
-      sh.solid.setUniform('uWarmPos', [0, 1.2, 0]); sh.solid.setUniform('uWarm', 0.6 + 0.6 * (s.core || 0) + 0.5 * (s.prox || 0));
+      sh.solid.setUniform('uWarmPos', [0, 1.2, 0]); sh.solid.setUniform('uWarm', 0.8 + 0.6 * (s.core || 0) + 0.5 * (s.prox || 0));
       sh.solid.setUniform('uStripCol', A.strip); sh.solid.setUniform('uKeyCol', [0.75, 0.72, 1.0]); sh.solid.setUniform('uProx', s.prox || 0);
       geo.solid.forEach((g) => p.model(g));
     }
@@ -278,7 +278,7 @@ AG.Atrium = {
       const sh = shaders(); p.shader(sh.plant); common(sh.plant, vw, t);
       sh.plant.setUniform('uWind', A.wind); sh.plant.setUniform('uHer', s.her || [0, -100, 0]); sh.plant.setUniform('uProx', s.prox || 0);
       sh.plant.setUniform('uColA', [1.0, 0.5, 0.85]); sh.plant.setUniform('uColB', [0.72, 0.55, 1.0]); sh.plant.setUniform('uColC', [0.5, 0.85, 1.0]);
-      sh.plant.setUniform('uGlow', 1.35);
+      sh.plant.setUniform('uGlow', 1.7);
       geo.plants.forEach((g) => p.model(g));
     }
     function drawFloor(vw, t, s) {

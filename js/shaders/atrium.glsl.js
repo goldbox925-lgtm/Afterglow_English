@@ -57,7 +57,7 @@ void main(){
   // materials: 0 brushed silver-lavender metal, 1 pearl stone (platform), 2 walkway, 3 planter
   vec3 base = mat < 0.5 ? vec3(0.34, 0.32, 0.46) : mat < 1.5 ? vec3(0.32, 0.28, 0.42) : mat < 2.5 ? vec3(0.2, 0.18, 0.29) : vec3(0.14, 0.11, 0.2);
   float gloss = mat < 0.5 ? 64.0 : mat < 1.5 ? 110.0 : 36.0;
-  vec3 amb = mix(vec3(0.07, 0.05, 0.12), vec3(0.22, 0.18, 0.34), N.y * 0.5 + 0.5);
+  vec3 amb = mix(vec3(0.10, 0.07, 0.17), vec3(0.34, 0.28, 0.5), N.y * 0.5 + 0.5);
   vec3 Lk = normalize(vec3(0.15, 1.0, 0.1));
   float dk = max(dot(N, Lk), 0.0) * 0.6 + 0.4;
   vec3 Lw = uWarmPos - vWorld; float dw = length(Lw); Lw /= dw;
@@ -74,7 +74,13 @@ void main(){
   float strip = vData.y;
   // the platform's strips are gold, the planters' rims pink, the architecture's follow uStripCol
   vec3 sc = mat > 0.5 && mat < 1.5 ? vec3(1.0, 0.68, 0.32) : mat > 2.5 ? vec3(1.0, 0.45, 0.8) : uStripCol;
-  c += sc * strip * (1.9 + 0.35 * sin(uTime * 0.8 + vData.z * 30.0));
+  c += sc * strip * (2.6 + 0.4 * sin(uTime * 0.8 + vData.z * 30.0));
+  // the dais glows from within round the flower: a warm gold light in its pearl top
+  if (mat > 0.5 && mat < 1.5 && N.y > 0.5){
+    float rr = length(vWorld.xz);
+    c += vec3(1.0, 0.62, 0.3) * exp(-rr * rr / 18.0) * (0.35 + 0.5 * uWarm) + vec3(0.75, 0.55, 1.0) * 0.06;
+    c += vec3(1.0, 0.75, 0.45) * exp(-pow((rr - 3.2) * 3.0, 2.0)) * 0.5 * uWarm;          // an inner ring of light
+  }
   c = haze(c, vWorld);
   outColor = vec4(c, 1.0);
 }
@@ -99,7 +105,7 @@ void main(){
   // bright pane edges (where the glass meets the frame)
   vec2 e = min(vUv, 1.0 - vUv);
   float edge = exp(-min(e.x, e.y) * 60.0);
-  vec3 c = tint * (0.12 + 0.5 * fr) + film * fr * 0.22 + vec3(0.85, 0.8, 1.0) * streak * (0.05 + 0.1 * fr) + uTintB * edge * 0.35;
+  vec3 c = tint * (0.16 + 0.6 * fr) + film * fr * 0.26 + vec3(0.85, 0.8, 1.0) * streak * (0.05 + 0.1 * fr) + uTintB * edge * 0.35;
   float a = clamp(0.09 + 0.5 * fr + 0.1 * streak + 0.25 * edge, 0.0, 0.72);
   c = haze(c, vWorld);
   outColor = vec4(c * a + c * 0.25 * edge, a);
@@ -116,7 +122,7 @@ uniform float uProx, uPool, uRings; uniform vec3 uInlayCol, uPoolCol;
 void main(){
   vec3 V = normalize(uCamPos - vWorld);
   float fr = pow(1.0 - max(V.y, 0.0), 5.0);
-  float refl = clamp(0.42 + 0.45 * fr, 0.0, 0.88);                 // how much of the mirrored room shows
+  float refl = clamp(0.58 + 0.35 * fr, 0.0, 0.92);                 // how much of the mirrored room shows
   vec2 xz = vWorld.xz; float r = length(xz), ang = atan(xz.y, xz.x);
   // polished dark stone with faint large tiles
   vec2 g = abs(fract(xz / 4.0) - 0.5);
@@ -127,7 +133,7 @@ void main(){
   for (int i = 0; i < 4; i++){ float rr = 10.5 + float(i) * 3.4; rings += exp(-pow((r - rr) * 7.0, 2.0)) * (1.0 - 0.15 * float(i)); }
   float spokes = exp(-pow(abs(fract(ang / 6.2832 * 16.0) - 0.5) * r * 0.35, 2.0) * 30.0) * smoothstep(9.5, 11.0, r) * smoothstep(23.0, 18.0, r);
   float flow = 0.6 + 0.4 * sin(r * 0.9 - uTime * 1.6);            // light flowing outward along them
-  vec3 em = uInlayCol * (rings + spokes * 0.6) * flow * uRings;
+  vec3 em = uInlayCol * (rings + spokes * 0.6) * flow * uRings * 1.5;
   // the golden pool round the platform, wider as she comes close
   em += uPoolCol * exp(-pow(r / uPool, 2.0)) * (0.3 + 0.45 * uProx);
   vec3 c = base * (1.0 - refl) + em;
@@ -164,12 +170,13 @@ void main(){
     float win = step(0.26, q.x) * step(q.x, 0.74) * step(0.3, q.y) * step(q.y, 0.76);
     float r = hash12(cell + h * 91.0);
     vec3 lit = r < 0.55 ? vec3(1.0, 0.72, 0.42) : r < 0.8 ? vec3(0.55, 0.75, 1.0) : vec3(1.0, 0.45, 0.8);
-    float on = step(0.55, hash12(cell * 1.3 + h * 17.0));
-    c = vec3(0.035, 0.026, 0.06) + lit * win * on * (0.4 + 0.45 * hash12(cell + 3.0));
+    float on = step(0.4, hash12(cell * 1.3 + h * 17.0));
+    vec3 glassTower = mix(vec3(0.06, 0.05, 0.14), vec3(0.16, 0.12, 0.32), h) * (0.7 + 0.3 * smoothstep(-80.0, 60.0, vWorld.y));
+    c = glassTower + lit * win * on * (0.7 + 0.6 * hash12(cell + 3.0));
   }
   // aerial haze: distance, and a pink-violet glow rising from the city below
   float d = length(vWorld - uCamPos);
-  float fog = 1.0 - exp(-d * 0.0024);
+  float fog = 1.0 - exp(-d * 0.0019);
   float low = smoothstep(uFloorY + 10.0, uFloorY - 120.0, vWorld.y);
   c = mix(c, mix(uFogCol, uSkyLow, low), clamp(fog + 0.35 * low, 0.0, 0.92));
   outColor = vec4(c, 1.0);
