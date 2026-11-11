@@ -252,7 +252,13 @@
         if (c && !(e.why === 'jump' && e.state === 'FRACTURE')) AG.FSM.startCinematic(c[0], c[1]);
         AG.Camera.snapNext();
       });
-      document.addEventListener('visibilitychange', () => { if (document.hidden && AG.FSM.playing) AG.FSM.pause(); });
+      // a hidden tab pauses the story. Round 02 only: coming back resumes the flight by itself (it was
+      // not the player's pause); Round 01 keeps its manual resume.
+      let hidPause = false;
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && AG.FSM.playing) { AG.FSM.pause(); hidPause = true; }
+        else if (!document.hidden) { if (hidPause && AG.Garden.isActive() && !AG.FSM.playing) AG.FSM.play(); hidPause = false; }
+      });
       // arrow keys: look around (01–04) · steer / descend / ASCEND (05). Never scroll the page.
       const ARROW = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', a: 'left', A: 'left', d: 'right', D: 'right', s: 'down', S: 'down' };
       const setKey = (k, v) => { const n = ARROW[k]; if (!n) return false; AG.Flight.press(n, v); return true; };
@@ -263,7 +269,7 @@
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown'].includes(e.key)) e.preventDefault();
         if (!entered) { if (e.key === 'Enter' || e.key === ' ') enter(); return; }
         const k = e.key;
-        if (setKey(k, true)) return;
+        if (setKey(k, true)) { if (AG.Garden.isActive() && !AG.FSM.playing) AG.FSM.play(); return; }   // (Round 02: steering resumes a paused flight)
         if (k === ' ') handlers.toggle();
         else if (k === 'r' || k === 'R') handlers.replay();
         else if (k === 'b' || k === 'B') AG.Reactivity.toggleDebug();   // temporary audio debug view

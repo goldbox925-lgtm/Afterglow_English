@@ -185,7 +185,12 @@ AG.Garden = (function () {
     setFlightAssist(true);
     parkMouse();                              // (the pointer is still on the R02 chip or the end card's button)
     placeOutside(START, true);
-    G.phase = 'approach'; G.t = 0; G.white = 0.9; G.open = 0;
+    // a short, soft flash of the doorway's light (it used to start at 0.9 and covered the HUD too)
+    G.phase = 'approach'; G.t = 0; G.white = 0.55; G.open = 0; G.offT = 0;
+    // the story path (end card → Enter the Memory Garden) may arrive paused (a hidden tab pauses the
+    // story) or with a cinematic flag left: the garden only updates while playing, so make sure it does
+    AG.FSM.cinematic = null;
+    if (!AG.FSM.playing) AG.FSM.play();
     document.body.classList.remove('ended'); document.body.classList.add('garden');
     $('endCard').classList.remove('show');
     AG.Camera.snapNext();
@@ -324,7 +329,7 @@ AG.Garden = (function () {
       if (G.exit && (G.exit.t += dt) > GUIDE_T) G.exit = null;
       P = G.portal = lineUpTarget(F);
       G.open = Math.min(1, G.open + dt / 1.5);
-      G.white = Math.max(0, G.white - dt / 1.2);
+      G.white = Math.max(0, G.white - dt / (G.visits ? 1.2 : 0.8));   // (the start's flash: gone in 0.7 s)
       // a gentle line-up, only when she is in front of the doorway and roughly heading for it
       const L = local(F.pos, P), rel = V.sub(P.c, F.pos);
       const want = Math.atan2(rel[0], -rel[2]), diff = Math.atan2(Math.sin(want - F.yaw), Math.cos(want - F.yaw));
@@ -338,6 +343,14 @@ AG.Garden = (function () {
       G.near = inFront ? U.smooth(160, 30, L.d) : 0;
       F.update(dt, input, true);
       trackTarget();
+      // is she heading away from the target's doorway? (for the hint: which arrow turns her to it.
+      // Nothing steers her: the flight is the player's.)
+      const TS = G.targetSite;
+      if (TS && !TS.bloomed && !PV) {
+        const r2 = V.sub(TS.portal.c, F.pos), off = Math.atan2(Math.sin(Math.atan2(r2[0], -r2[2]) - F.yaw), Math.cos(Math.atan2(r2[0], -r2[2]) - F.yaw));
+        G.turnOff = off;
+        G.offT = Math.abs(off) > (G.offT > 1.2 ? 0.5 : 0.9) ? (G.offT || 0) + dt : 0;   // (shown after 1.2 s; until she faces it within ~30°)
+      } else G.offT = 0;
       if ((G.occT = (G.occT || 0) - dt) <= 0) { G.occT = 0.12; occlusion(); }
       // through the doorway? (only when she flies into it herself: nothing moves her there)
       // (the ending preview shows the city only: its doorways are closed, js/core/collision.js keeps
@@ -623,11 +636,16 @@ AG.Garden = (function () {
     return out;
   }
   /* the control hint during the flight out and its first seconds outside */
+  const turning = () => G.phase === 'approach' && !G.exit && !PV && G.offT > 1.2 && G.targetSite && !G.targetSite.bloomed;
   function hintText() {
-    if (G.phase === 'approach' && G.entryHint && G.targetSite) return 'Fly into the glowing doorway to enter ' + G.targetSite.name + '. Use ← → and ↑ ↓ to line up.';
+    if (turning()) {
+      const left = G.turnOff < 0, k = left ? '←' : '→';
+      return 'The doorway of ' + G.targetSite.name + ' is ' + (Math.abs(G.turnOff) > 2.4 ? 'behind her' : 'to her ' + (left ? 'left' : 'right')) + '. Hold ' + k + ' until she faces the glowing light (follow the arrow).';
+    }
+    if (G.phase === 'approach' && G.entryHint && G.targetSite) return 'She flies forward on her own: fly into the glowing doorway to enter ' + G.targetSite.name + '. ← → and ↑ ↓ line her up.';
     return G.phase === 'launch' || (G.phase === 'approach' && G.exit) ? HINT : null;
   }
-  function hintTitle() { return G.phase === 'approach' && G.entryHint && G.targetSite ? 'ENTER ' + G.targetSite.name.toUpperCase() : 'FLY ON'; }
+  function hintTitle() { if (turning()) return 'TURN TOWARD ' + G.targetSite.name.toUpperCase(); return G.phase === 'approach' && G.entryHint && G.targetSite ? 'ENTER ' + G.targetSite.name.toUpperCase() : 'FLY ON'; }
   /* for the UI: is the target's doorway, or a completed building's rooftop flower, hidden behind other
      buildings from the camera? (checked ~8 times a second; the building itself does not count) */
   const css = (c) => 'rgb(' + c.map((v) => Math.round(v * 255)).join(',') + ')';

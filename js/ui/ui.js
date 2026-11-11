@@ -8,7 +8,7 @@ AG.UI = (function () {
   const U = AG.U, C = AG.CONFIG;
   const $ = (id) => document.getElementById(id);
   let stateShownAt = 0;
-  let idle = 0, hidden = false, forceHidden = false, cardTimer = null, lastHint = '';
+  let idle = 0, hidden = false, forceHidden = false, cardTimer = null, lastHint = '', veilK = 1;
 
   const ICON = {
     play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
@@ -222,6 +222,8 @@ AG.UI = (function () {
     if (F.cinematic) return { title: 'WATCH THE SCENE', text: "You'll be able to interact soon." };
     const def = C.states.find((s) => s.id === st);
     if (st === 'AFTERGLOW' && AG.Garden && AG.Garden.isActive()) {
+      // paused (Space, ▶, or the tab was hidden): say so — otherwise the flight just looks frozen
+      if (!F.playing) return { title: 'PAUSED', text: 'Press Space or ▶ to continue the flight.', keep: true };
       const hint = AG.Garden.hintText();                               // the flight out of a transformed building
       if (hint) return { title: AG.Garden.hintTitle ? AG.Garden.hintTitle() : 'FLY ON', text: hint, keep: true };
       if (AG.Gardens.allComplete()) return null;                       // free flight: nothing left to ask of her
@@ -295,7 +297,8 @@ AG.UI = (function () {
     document.body.classList.toggle('flying', st === 'AFTERGLOW');
     document.body.classList.toggle('cinematic', !!F.cinematic);
     // ---- the prompt ----
-    const pr = F.playing ? promptFor(st) : null;
+    // (paused: no prompt — except in Round 02, where the card says it is paused)
+    const pr = F.playing || (AG.Garden && AG.Garden.isActive()) ? promptFor(st) : null;
     const panel = $('stagePanel');
     const key = pr ? pr.title + pr.text : '';
     if (panel.dataset.key !== key) { panel.dataset.key = key; if (pr) { $('stageTitle').textContent = pr.title; $('stageText').textContent = pr.text; } stateShownAt = performance.now(); }
@@ -375,7 +378,10 @@ AG.UI = (function () {
       document.body.classList.add('ended'); $('endCard').classList.add('show');
     }
     // Round 02: the doorway's white light (entering / leaving the garden)
-    const gv = $('gardenVeil'), wv = AG.Garden ? AG.Garden.white.toFixed(3) : '0.000';
+    // (paused: the light eases out in real time, so a pause never leaves a white, frozen-looking frame;
+    // the garden's own fade is untouched and resumes where it was)
+    veilK = AG.U.damp(veilK, AG.FSM.playing ? 1 : 0, 6, dt);
+    const gv = $('gardenVeil'), wv = AG.Garden ? (AG.Garden.white * veilK).toFixed(3) : '0.000';
     if (gv && gv.dataset.o !== wv) { gv.dataset.o = wv; gv.style.opacity = wv; }
     const tr = $('titleReveal');
     const showT = S.title > 0.02;

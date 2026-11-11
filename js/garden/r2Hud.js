@@ -75,6 +75,9 @@ AG.R2Hud = (function () {
     if (G.phase !== 'approach') return G.site;
     if (G.site && G.site.bloomed && !G.site.completed) return G.site;   // still transforming behind her
     if (Gs.allComplete()) return null;
+    // the same building as the objective above ("NEXT: ROSE · 120 m"), not whichever doorway she
+    // happens to face (it said "Aurora next" while the objective said Rose)
+    if (G.targetSite && !G.targetSite.bloomed) return G.targetSite;
     return Gs.sites.find((s) => s.portal === G.portal) || null;
   }
 

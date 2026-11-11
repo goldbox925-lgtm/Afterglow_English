@@ -1046,3 +1046,48 @@ unchanged.
   slides toward her, so the flower's far petals can leave the frame there. On wide screens
   (1280×720) both stay fully in frame.
 - **Not verified.** A real phone, and GPU time.
+
+## Round 02 entry: the "frozen" white start (fix)
+
+**Symptom.** Right after Round 02 starts, the frame stays washed out (white/pink veil over the
+city and the HUD), "NEXT: ROSE · 160 m" does not change, and the arrow keys do nothing.
+
+**Cause.** Two things combined:
+
+- **The game was paused.** A hidden tab pauses the story (`visibilitychange`), and so do Space and
+  ▶. The garden only updates while the story plays, so the start flash (`Garden.white`, 0.9) never
+  faded. The only sign of the pause was the ▶ icon. The story path (end card → Enter the Memory
+  Garden) also did not resume a paused game (the R02 chip / key 6 did).
+- **The start flash was strong.** It started at 0.9 and covered the HUD, so any stall looked like a
+  white freeze.
+
+A second "stuck" case without any pause: one tap of ← or → at the start can take her past the
+doorway. The line-up assist only helps when she already faces it, so she flies on, while the card
+kept saying "Fly into the glowing doorway". The flight itself was never stuck.
+
+**Changes (Round 02 only; the flight mechanics are unchanged).**
+
+| Where | Change |
+| --- | --- |
+| `garden.js` `start()` | Start flash 0.55, faded in 0.7 s (first approach only). Clears a leftover cinematic flag and resumes a paused story (story path = R02 chip). |
+| `ui.js` | While paused, the veil eases out in real time (the garden's own fade is untouched and resumes). In Round 02 the card shows **PAUSED · Press Space or ▶ to continue the flight.** |
+| `sketch.js` | Round 02 only: returning to a tab that was paused by hiding resumes by itself, and an arrow key resumes a paused flight. Round 01 keeps the manual resume. |
+| `garden.js` hint | Entry card: "She flies forward on her own: fly into the glowing doorway…". After 1.2 s heading more than ~50° away from the target doorway: **TURN TOWARD ROSE** with the side (left / right / behind her) and the key to hold. It clears when she faces it within ~30°. |
+| `r2Hud.js` | The bottom row names the same building as the objective ("Rose next"), not whichever doorway she faces ("Aurora next" before). |
+
+**Checks (browser, real time, 1440×860 and 375×812).**
+
+| Check | Result |
+| --- | --- |
+| Paused 0.25 s after the start (the reported frame) | Veil 0.62 → 0 in under 1 s; card PAUSED; ▶ / Space / an arrow resumes |
+| Seeds 579367, 12345, no input | Rose entered at 7.7 s / 9.5 s; full white 0.2–0.3 s; garden white 0 afterwards |
+| Seed 777, ← at the start | TURN TOWARD ROSE after ~2.5 s, "to her right, hold →"; following it → entered at 9.1 s |
+| ← turn: yaw −0.45 rad in 0.7 s; ↑ tap: +4.6 m | input reaches the flight |
+| Distance display | 170 → 150 → … → < 10 m, live |
+| Replay (R) from inside the garden, then R02 | NUMBNESS, garden off, veil 0; R02 again starts at 130–170 m and flies |
+| End card → Enter the Memory Garden while paused | resumes; approach runs |
+| Hidden tab | R02: paused then resumed on return. R01: stays paused, no card (unchanged) |
+| Round 01 stages 1–5 | Same states and cards; no veil; garden off |
+| Console | No new errors. An older `interactions.js:222` TypeError (Round 01 code, camera without target) appears only in earlier harness runs and could not be reproduced in normal play; left unchanged. |
+
+**Not verified.** The user's own Chrome / Live Server (port 5502) and their GPU.
