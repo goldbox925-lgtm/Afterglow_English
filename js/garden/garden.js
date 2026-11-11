@@ -121,6 +121,8 @@ AG.Garden = (function () {
   function reset() {
     closePortal();
     setFlightAssist(false);
+    if (AG.Flight.garden) AG.Flight.exitGarden();
+    G.pendingAwaken = false; G.prox = 0;
     G.phase = 'off'; G.white = 0; G.open = 0; G.near = 0; G.t = 0; G.visits = 0;
     if (p && p.canvas) p.canvas.style.cursor = '';
     if (G.scene) { G.scene.flower.reset(); G.scene.resetView(); }
@@ -175,14 +177,25 @@ AG.Garden = (function () {
         G.phase = 'inside'; G.t = 0; G.white = 1; G.visits++;
         if (!G.scene) G.scene = AG.GardenScene.create(p);
         showInside(true);
+        enterGardenFlight();
         AG.U.emit('gardenPhase', { phase: G.phase });
       }
     } else if (G.phase === 'inside') {
       G.white = Math.max(0, 1 - G.t / FADE_IN);
+      // her flight continues in the garden (AG.Flight's garden mode: p5.Vector arrive steering)
+      F.update(dt, input, true);
+      // PROXIMITY: p.dist to the flower's heart → p.map (9 m far … 3.6 m close) → p.constrain 0..1
+      const f = G.scene.flower, H = f.heart().c;
+      const d = p.dist(F.pos[0], F.pos[1], F.pos[2], H[0], H[1], H[2]);
+      G.prox = p.constrain(p.map(d, 9, 3.6, 0, 1), 0, 1);
+      f.setVisitor(F.pos, G.prox);
+      // a click on the heart before she arrived waited for her: the flower wakes as she arrives
+      if (G.pendingAwaken && F.gardenArrived) { G.pendingAwaken = false; f.awaken(); }
     } else if (G.phase === 'leave') {
       G.white = U.smooth(0, LEAVE_T, G.t);
       if (G.t >= LEAVE_T) {
         showInside(false);
+        F.exitGarden();                       // back to her city flight
         placeOutside(P.inset + AG.CONFIG.flight.radius + 14, false);
         setFlightAssist(true);
         G.phase = 'approach'; G.t = 0; G.white = 1;
@@ -194,8 +207,8 @@ AG.Garden = (function () {
 
   /* the garden scene replaces the city image while inside (or fading out of it) */
   function drawsScene() { return G.phase === 'inside' || G.phase === 'leave'; }
-  function draw(dt) {
-    G.scene.draw(dt);
+  function draw(dt, CH) {
+    G.scene.draw(dt, { CH });                 // the garden, with her in it (the city renderer's character drawing)
     if (!G.layer) G.layer = AG.R2Layer.create(p);
     G.layer.draw(G.scene);                    // the p5-drawn light layer, on top (js/garden/r2Layer.js)
     const f = G.scene.flower;
@@ -204,6 +217,19 @@ AG.Garden = (function () {
     $('gardenBar').style.width = (f.bloom * 100).toFixed(1) + '%';
     const st = f.stageName() + (f.dragging ? ' · unfolding' : '');
     if ($('gardenStage').textContent !== st) $('gardenStage').textContent = st;
+  }
+
+  /* her entrance into the garden: the same flight state, now in the garden mode. She glides in
+     from the left of the view and settles front-left of the flower, where the camera sees both. */
+  function enterGardenFlight() {
+    const sc = G.scene, c = sc.flower.center;
+    sc.camera();
+    const camAz = Math.atan2(sc.view.eye[2] - c[2], sc.view.eye[0] - c[0]);
+    const az0 = camAz + 1.8, r = 7.5;
+    const start = [c[0] + Math.cos(az0) * r, c[1] + 3.3, c[2] + Math.sin(az0) * r];
+    const inward = [-Math.cos(az0) * 2.4, -0.2, -Math.sin(az0) * 2.4];
+    AG.Flight.enterGarden({ center: c.slice(), start, v0: inward, az: camAz + 0.8 });
+    G.pendingAwaken = false;
   }
 
   /* the doorway and its beacon, for the city renderer */
@@ -219,7 +245,13 @@ AG.Garden = (function () {
      js/sketch.js (p.mousePressed / mouseDragged / mouseReleased / mouseMoved / mouseWheel, which
      p5 also fires for touch). No listeners of its own. ---------- */
   function wantsPointer() { return G.phase === 'inside' && !!G.scene && AG.FSM.playing; }
-  function pointerDown(x, y) { if (!wantsPointer()) return false; G.scene.hover(x, y); return G.scene.down(x, y) || true; }
+  function pointerDown(x, y) {
+    if (!wantsPointer()) return false;
+    const onHeart = G.scene.hover(x, y);
+    // she is still flying in: a click on the sleeping flower's heart waits for her (no drag yet)
+    if (onHeart && !G.scene.flower.awake && !AG.Flight.gardenArrived) { G.pendingAwaken = true; return true; }
+    return G.scene.down(x, y) || true;
+  }
   function pointerMove(x, y) { if (wantsPointer()) G.scene.move(x, y); }
   function pointerUp() { if (G.scene) G.scene.up(); }
   function hover(x, y) {

@@ -1,8 +1,8 @@
 # Round 02 · Memory Garden — p5.js-first technical plan
 
-Status: **phases 1 and 2 are implemented**: the state backbone, direct R02 navigation, one input
-path, hover, and the p5-drawn light layer. Phases 3–4 are proposals with test criteria, to be
-built one at a time.
+Status: **phases 1–3 are implemented**: the state backbone, direct R02 navigation, one input path,
+hover, the p5-drawn light layer, and the heroine in the garden. Phase 4 (the building's
+transformation) is a proposal with test criteria.
 
 ## 0. Audit: what exists today
 
@@ -115,6 +115,36 @@ polling.
 
 ## 7. Phases and test criteria
 
+**Phase 3 notes (as built).** Phase 3 has no new movement system: it reuses her existing
+flight controller, poses and character drawing.
+- **Flight.** `AG.Flight` (`js/core/flight.js`) has a **garden mode** (`enterGarden` /
+  `exitGarden`). It keeps the same state (`F.pos`, `F.yaw`) and the same `p5.Vector` velocity,
+  with garden rules:
+  - "arrive" steering toward a point on a ring round the flower: desired velocity
+    `p5.Vector.sub(target, pos).setMag(p.map(d, 0, slowR, 0, cruise))`;
+  - the steering force `(desired − vel)·respond`, limited with `.limit()`;
+  - fixed sub-steps of ≤ 1/120 s;
+  - a keep-out sphere round the flower (`dot` / `sub`, so she never passes through it).
+- **Measured.** She settles on the ring with **no overshoot**, arriving in 2.9 s at 10, 30 and
+  60 fps alike (identical paths).
+- **Keys and mouse.** ← → move her round the flower and ↑ ↓ change her height (the existing key
+  handlers). The mouse never steers her in the garden.
+- **Poses.** `CharacterDirector` uses the same images: `G` (flying, back view) while she flies
+  in, cross-faded to `E` (levitating) once she has arrived.
+- **Drawing.** `AG.Renderer.drawCharacterWith()` lets the garden scene draw her with the city's
+  own character code and the garden's camera. She is drawn before or after the translucent petals
+  depending on which is nearer. Her aura is at a third, because its square sprite edge shows
+  against the garden's plain backdrop.
+- **Proximity.** `p.dist` (her → the heart), then `p.map` (9 m → 3.6 m), then `p.constrain`
+  give `prox` 0..1, eased with `p.lerp`. Measured, her near vs removed:
+  - core 0.08 → 0.36 and emission 0.55 → 0.79;
+  - the petals facing her lean up to 0.085 rad toward her (`p.rotate`);
+  - motes 14 → 31, drifting toward her at 0.53 m/s (`p5.Vector` pull).
+- **Click before she arrives.** A click on the sleeping heart while she is still flying in waits
+  for her: the flower wakes when she arrives.
+- **Conflicts.** None: orbiting the camera never moves her, and a drag with → held opens the
+  flower and moves her round it, with the camera still.
+
 **Phase 2 notes (as built):**
 - **Input.** `js/sketch.js` defines `p.mousePressed`, `p.mouseDragged`, `p.mouseReleased`,
   `p.mouseMoved` and `p.mouseWheel`. They forward to `AG.Garden` only while the garden is on
@@ -138,7 +168,7 @@ polling.
 |---|---|---|
 | **1 (done)** | `AG.R2` state and phase machine; the "R02" chip and key **6** jump straight to the start of Round 02; the HUD shows the Round 02 phase | The R02 chip and key 6 start Round 02 (the doorway flight) from any stage, with no lift-off cinematic and no end card. Phases run ENTER → APPROACH → AWAKEN → DRAG → BLOOM → TRANSFORM → EXIT → EXPLORE as the existing flow is played. The story path (end card → Enter the Memory Garden) still works. All five Round 01 stages work. No console errors. |
 | **2 (done)** | One input path (p5 callbacks); hover on the heart (`mouseMoved` + `dist`) brightens the core; the p5 light layer (cue ring, awaken pulse, orbiting symbols, pollen halos) | Hover changes the core brightness (measured). Each layer element is visible in screenshots, and absent when its `p.*` call is disabled (ablation). Click / drag / release unchanged. The preview still works. |
-| 3 | The heroine in the garden; APPROACH by pointing (`mouseMoved` / `mousePressed` → arrive steering, `p5.Vector`); proximity → glow, petal response, motes drifting toward her | Her distance to the flower changes the glow (measured). She stops smoothly (no overshoot) at 10, 30 and 60 fps. Drag still works. |
+| **3 (done)** | The heroine in the garden; APPROACH by pointing (`mouseMoved` / `mousePressed` → arrive steering, `p5.Vector`); proximity → glow, petal response, motes drifting toward her | Her distance to the flower changes the glow (measured). She stops smoothly (no overshoot) at 10, 30 and 60 fps. Drag still works. |
 | 4 | TRANSFORM: at 100 %, `AG.Vines` (noise-guided `p5.Vector` walkers, seeded `p.random`, beziers, `lerpColor`, `millis`) grows light vines in the garden (p5 layer) and across the doorway building's facade (renderer pass); EXIT → EXPLORE shows the transformed building in the city | The growth starts only after 100 %, is deterministic per city, keeps 60 fps on the balanced tier, and persists when she flies around the building. Round 01 is unchanged. |
 
 Each phase ends with screenshots, an interaction test, a Round 01 check and an honest report of

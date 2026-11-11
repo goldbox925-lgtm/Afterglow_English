@@ -650,6 +650,22 @@ AG.Renderer = (function () {
     p.model(quad);
     gl.enable(gl.DEPTH_TEST);
   };
+  /* Round 02: draw HER (the same pose images, CharacterDirector items and character shader as in
+     the city) into another scene's framebuffer, seen by that scene's camera — the Memory Garden
+     (js/garden/gardenScene.js). cam: { pos, right, up, dir, fov, V, P }. The light is the garden's:
+     no fog, a lavender ambient rim and a warm glow from the flower (light.warm 0..1). */
+  R.drawCharacterWith = function (cam, CH, t, light) {
+    if (!CH || !world || !SH.character) return;
+    const w = (light && light.warm) || 0;
+    const S = { mood: 1, restore: 1, heroA: 0.15 + 0.35 * w, dawn: 0.25 * w, ambSky: [0.5, 0.4, 0.72], tint: [1.0, 0.62 + 0.1 * w, 0.8],
+      fogDensity: 0, fogFalloff: 0.002, fogLow: [0, 0, 0], fogHigh: [0, 0, 0] };
+    const F = { t, at: t, view: cam.V, proj: cam.P, cam };
+    // her aura sprite at a third: against the garden's plain backdrop its square edge would show
+    const items = CH.items.map((it) => Object.assign({}, it, { aura: (it.aura || 0) * 0.33 }));
+    gl.depthMask(false);
+    drawCharacter(F, S, cam, Object.assign({}, CH, { items }));
+    p.blendMode(p.BLEND);
+  };
   R.letterbox = 1; R.freeze = 0;
   R._debug = () => ({ sceneFB, bA, cB });
 

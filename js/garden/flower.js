@@ -50,6 +50,7 @@ AG.BloomFlower = (function () {
       bloom: 0, target: 0, awake: false, awakeK: 0, pulseT: 99, dragging: false,
       grow: 0.94, growPulseT: 99, fullPulseT: 99, full: false, idleYaw: 0,   // p.scale() / p.rotate() inputs (gardenScene.js)
       hover: false, hoverK: 0,                                               // the pointer over the golden centre (p.mouseMoved)
+      visitor: null, proxTo: 0, prox: 0,                                     // Round 02: her position and closeness (setVisitor)
       petals: [], stamA: new Float32Array(STAMENS * 4), stamB: new Float32Array(STAMENS * 4),
       spr: new Float32Array(MAX_SPR * 4), sprC: new Float32Array(MAX_SPR * 4), sprN: 0,
       motes: [], colors: {}, t: 0, n: 0, clicks: 0
@@ -94,7 +95,7 @@ AG.BloomFlower = (function () {
 
     function reset() {
       F.bloom = 0; F.target = 0; F.awake = false; F.awakeK = 0; F.pulseT = 99; F.dragging = false; F.motes.length = 0; F.clicks = 0;
-      F.growPulseT = 99; F.fullPulseT = 99; F.full = false; F.hover = false; F.hoverK = 0;
+      F.growPulseT = 99; F.fullPulseT = 99; F.full = false; F.hover = false; F.hoverK = 0; F.prox = 0; F.proxTo = 0;
     }
 
     /* the heart of the flower for picking: tall inside the closed bud, low and wide when open */
@@ -114,10 +115,18 @@ AG.BloomFlower = (function () {
     }
 
     let drag = null;
+    /* CLICK — awaken: the core pulses, the flower swells (p.scale). Also called by the garden
+       when a click on the heart was made before she arrived (it waits for her). */
+    function awaken() {
+      if (!F.awake) { F.awake = true; F.pulseT = 0; F.growPulseT = 0; }
+      else F.pulseT = Math.min(F.pulseT, 0.35);              // a softer pulse on later presses
+    }
+    /* Round 02: the heroine near the flower. pos = her world position (or null), prox 0..1
+       (js/garden/garden.js: p.dist → p.map → p.constrain); eased here with p.lerp */
+    function setVisitor(pos, prox) { F.visitor = pos; F.proxTo = pos ? prox : 0; }
     function pointerDown(ro, rd, mouse, centreScreen, radiusPx) {
       if (pick(ro, rd) < 0) return false;
-      if (!F.awake) { F.awake = true; F.pulseT = 0; F.growPulseT = 0; }   // CLICK — awaken: the core pulses, the flower swells (p.scale)
-      else F.pulseT = Math.min(F.pulseT, 0.35);              // a softer pulse on later presses
+      awaken();
       F.clicks++;
       drag = { d0: p.dist(mouse[0], mouse[1], centreScreen[0], centreScreen[1]), t0: F.target, cs: centreScreen, R: Math.max(40, radiusPx) };
       F.dragging = true;
@@ -170,6 +179,12 @@ AG.BloomFlower = (function () {
         P.sway = breath + nz * 0.05 * (0.3 + b);
         P.pose.th = P.hinge + P.sway;                          // (the shader needs it only for the closed bud's wrap)
         P.grow = p.lerp(0.9, 1.0, e);                          // each petal grows a little as it unfolds (p.scale)
+        // the petals on HER side lean toward her a little as she comes close (p.rotate, gardenScene.js);
+        // a response only: the bloom value itself is never changed by her
+        if (F.visitor) {
+          const az = Math.atan2(F.visitor[2] - F.center[2], F.visitor[0] - F.center[0]);
+          P.lean = 0.09 * F.prox * Math.max(0, p.cos(P.phi - F.idleYaw - az)) * (1 - 0.5 * e);
+        } else P.lean = 0;
         P.pose.k0 = p.lerp(P.closed.k0, P.open.k0, e) + nz2 * 0.06 * b;
         P.pose.k1 = p.lerp(P.closed.k1, P.open.k1, e);
         P.pose.cup = p.lerp(P.closed.cup, P.open.cup, e);
@@ -198,10 +213,12 @@ AG.BloomFlower = (function () {
       const pulse = Math.exp(-F.pulseT * 3.0);
       // HOVER: the golden centre brightens while the pointer is over it (eased, p.lerp)
       F.hoverK = p.lerp(F.hoverK, F.hover && !F.dragging ? 1 : 0, 1 - Math.exp(-8 * dt));
-      F.core = 0.08 + 0.3 * F.awakeK + 1.15 * Math.pow(b, 1.4) + 0.9 * pulse * (0.4 + 0.6 * F.awakeK) + 0.45 * F.hoverK;
+      // PROXIMITY: her closeness, eased (p.lerp), warms the core and the petals' own glow
+      F.prox = p.lerp(F.prox, F.proxTo, 1 - Math.exp(-2.5 * dt));
+      F.core = 0.08 + 0.3 * F.awakeK + 1.15 * Math.pow(b, 1.4) + 0.9 * pulse * (0.4 + 0.6 * F.awakeK) + 0.45 * F.hoverK + 0.3 * F.prox;
       F.vein = 0.18 + 0.35 * F.awakeK + 0.9 * b;
       // emissive glow and iridescence strength: already alive in the bud, fuller as it opens
-      F.emit = p.map(b, 0, 1, 0.55 + 0.25 * F.awakeK, 1.15) + 0.3 * pulse;
+      F.emit = p.map(b, 0, 1, 0.55 + 0.25 * F.awakeK, 1.15) + 0.3 * pulse + 0.25 * F.prox;
       F.iri = p.constrain(0.45 + 0.15 * F.awakeK + 0.5 * b, 0, 1);
       F.pulseR = Math.min(1, F.pulseT * 0.75); F.pulseA = pulse * 0.9;
       // stamens: rise out of the opening bud and spread, swaying with noise
@@ -232,7 +249,7 @@ AG.BloomFlower = (function () {
     let carry = 0;
     const MOTE_COLS = [[1.0, 0.55, 0.85], [0.75, 0.6, 1.0], [0.45, 0.9, 1.0], [1.0, 0.82, 0.5]];
     function updateMotes(dt, t, b) {
-      const rate = (F.awake ? 1.5 : 0.4) + 26 * Math.pow(b, 1.2);    // busier as it opens
+      const rate = (F.awake ? 1.5 : 0.4) + 26 * Math.pow(b, 1.2) + 8 * F.prox;   // busier as it opens, and as she comes near
       carry += dt * rate;
       while (carry >= 1) {
         carry -= 1;
@@ -248,6 +265,11 @@ AG.BloomFlower = (function () {
         const m = F.motes[i];
         m.update(dt, t);
         m.vel.mult(Math.exp(-1.4 * dt));                     // calmer than her trail glints
+        // near her, the motes drift toward her (a p5.Vector pull, stronger the closer she is)
+        if (F.visitor && F.prox > 0.01) {
+          const pull = p5.Vector.sub(p.createVector(F.visitor[0], F.visitor[1], F.visitor[2]), m.pos);
+          if (pull.mag() > 0.3) m.vel.add(pull.setMag(1.4 * F.prox * dt * sc / 2));
+        }
         if (m.isDead()) F.motes.splice(i, 1);
       }
     }
@@ -274,7 +296,7 @@ AG.BloomFlower = (function () {
       return b < 0.15 ? (F.awake ? 'Awakened bud' : 'Closed bud') : b < 0.45 ? 'Awakening' : b < 0.85 ? 'Opening' : 'Full bloom';
     }
 
-    return Object.assign(F, { reset, update, pick, heart, pointerDown, pointerDrag, pointerUp, stageName, PETALS, STAMENS });
+    return Object.assign(F, { reset, update, pick, heart, pointerDown, pointerDrag, pointerUp, awaken, setVisitor, stageName, PETALS, STAMENS });
   }
 
   return { create };

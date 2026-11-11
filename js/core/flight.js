@@ -80,6 +80,7 @@ AG.Flight = (function () {
     upHeld = 0; sinceUp = 99; cloudHit = false; pendingLift = 0; liftLeft = 0; lastTapAt = -1e9; steerHeld = 0; upDownAt = 0; upHeldT = 0;
     F.boosting = false; F.lifts = 0; F.doubleTaps = 0; F.finaleT = 0; F.gliding = false; F.finales = 0;
     F.noFragments = false; F.assistTurn = 0; F.assistVy = 0; F.avoidOff = false; F.assistHold = false;   // Round 02 (js/garden/garden.js)
+    F.garden = null; F.gardenArrived = false;                                                              // Round 02: inside the Memory Garden
     resetMotion();
     if (AG.Fragments) AG.Fragments.reset();          // every flight starts with all five fragments in place
   }
@@ -206,8 +207,94 @@ AG.Flight = (function () {
     return U.clamp(diff * 2, -FC.alignRate, FC.alignRate);
   }
 
+  /* ---------------------------------------------------------------------------------------------
+     ROUND 02 · INSIDE THE MEMORY GARDEN (js/garden/garden.js). The SAME flight state (F.pos, F.yaw,
+     her velocity `vel` as a p5.Vector) and the same pose / camera consumers, with garden rules
+     instead of the city's: no buildings, no fragments, and she is drawn to the flower.
+
+     STEERING — the "arrive" behaviour, in p5.Vector maths:
+       target   = a point on a ring round the flower (radius g.ring), at her side (azimuth g.az)
+                  and the hover height g.h
+       desired  = p5.Vector.sub(target, pos), its length set (setMag) to the cruise speed, or less
+                  inside the slowing radius: p.map(distance, 0, slowR, 0, cruise)   → DECELERATION
+       steer    = p5.Vector.sub(desired, vel).mult(respond).limit(maxForce)          → ACCELERATION
+                  (respond 5/s against a slowing gain of cruise/slowR = 0.8/s: an over-damped
+                  approach, so she settles without overshooting)
+       vel     += steer · h ;  vel.limit(cruise) ;  pos += vel · h
+     integrated in fixed sub-steps of ≤ 1/120 s, so the path is the same at 10, 30 or 60 fps.
+     The flower's keep-out sphere: inside it, pos is pushed back out to its surface and the
+     velocity's inward part removed (p5.Vector dot / sub), so she never passes through the petals.
+     KEYS (the existing ← → ↑ ↓ handlers): ← → move her round the flower (the ring azimuth), ↑ ↓
+     raise / lower the hover height. The MOUSE does not steer her here: in the garden it belongs
+     to the flower (click / drag) and the camera (drag elsewhere, wheel).
+     ARRIVED (the interaction mode): close to the target and slow (hysteresis), she levitates
+     facing the flower (CharacterDirector: flying pose → levitating pose, cross-faded).
+     --------------------------------------------------------------------------------------------- */
+  let gTarget = null, gTmp = null, gC = null;
+  function enterGarden(g) {
+    // g: { center, start, ring, h, keepOut, cruise, slowR, maxForce }
+    F.garden = Object.assign({ ring: 3.8, h: 2.4, keepOut: 2.7, cruise: 3.2, slowR: 4.0, respond: 5, maxForce: 9 }, g);
+    if (!gTarget) { gTarget = p.createVector(0, 0, 0); gTmp = p.createVector(0, 0, 0); gC = p.createVector(0, 0, 0); }
+    const G = F.garden, c = G.center;
+    F.pos = G.start.slice();
+    G.az = G.az !== undefined ? G.az : Math.atan2(F.pos[2] - c[2], F.pos[0] - c[0]);   // where on the ring she settles (default: her side)
+    vel.set(G.v0 || [0, 0, 0]);
+    F.yaw = Math.atan2(c[0] - F.pos[0], -(c[2] - F.pos[2])); F.yawRate = 0; F.bank = 0; F.upright = 0; F.vy = 0;
+    F.speed = vel.mag(); F.flySpeed = F.speed; F.gardenArrived = false; F.finale = false; F.arc = false;
+    pendingLift = 0; liftLeft = 0;
+    trail = []; for (let i = 0; i < 24; i++) trail.push(F.pos.slice());
+  }
+  function exitGarden() { F.garden = null; F.gardenArrived = false; }
+
+  function gardenUpdate(dt, input) {
+    const G = F.garden, k = F.keys;
+    pendingLift = 0; liftLeft = 0;                                 // (↑ taps / holds mean "higher" here)
+    G.az += ((k.right ? 1 : 0) - (k.left ? 1 : 0)) * 0.85 * dt;
+    G.h = p.constrain(G.h + ((k.up ? 1 : 0) - (k.down ? 1 : 0)) * 1.4 * dt, 0.9, 4.6);
+    gC.set(G.center[0], G.center[1] + 1.0, G.center[2]);
+    gTarget.set(G.center[0] + Math.cos(G.az) * G.ring, G.center[1] + G.h, G.center[2] + Math.sin(G.az) * G.ring);
+    pos.set(F.pos[0], F.pos[1], F.pos[2]);
+    const n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
+    for (let s = 0; s < n; s++) {
+      // ARRIVE: desired velocity toward the target, slowing inside slowR (p.map), steering force limited
+      const desired = p5.Vector.sub(gTarget, pos);
+      const d = desired.mag();
+      desired.setMag(d < G.slowR ? p.map(d, 0, G.slowR, 0, G.cruise) : G.cruise);
+      const steer = p5.Vector.sub(desired, vel).mult(G.respond).limit(G.maxForce);
+      vel.add(steer.mult(h)).limit(G.cruise);
+      pos.add(p5.Vector.mult(vel, h));
+      // the flower's keep-out sphere: back to its surface, inward velocity removed
+      gTmp.set(pos).sub(gC);
+      const dd = gTmp.mag();
+      if (dd < G.keepOut) {
+        gTmp.setMag(G.keepOut); pos.set(gC).add(gTmp);
+        const nrm = gTmp.copy().normalize(), vn = vel.dot(nrm);
+        if (vn < 0) vel.sub(nrm.mult(vn));
+      }
+      if (pos.y < G.center[1] + 0.5) { pos.y = G.center[1] + 0.5; if (vel.y < 0) vel.y = 0; }
+    }
+    F.pos = [pos.x, pos.y, pos.z]; F.vel = [vel.x, vel.y, vel.z];
+    // body: face where she glides; once slow, turn to face the flower (angles eased with p.lerp)
+    const hs = Math.hypot(vel.x, vel.z);
+    const wantYaw = hs > 0.35 ? Math.atan2(vel.x, -vel.z) : Math.atan2(G.center[0] - pos.x, -(G.center[2] - pos.z));
+    const dy = Math.atan2(Math.sin(wantYaw - F.yaw), Math.cos(wantYaw - F.yaw));
+    const prevYaw = F.yaw;
+    F.yaw += p.lerp(0, dy, 1 - Math.exp(-4 * dt));
+    F.yawRate = dt > 0 ? (F.yaw - prevYaw) / dt : 0;
+    F.speed = hs; F.flySpeed = hs; F.vy = vel.y;
+    F.bank = U.damp(F.bank, U.clamp(-F.yawRate * 0.35, -0.4, 0.4), 4, dt);
+    F.upright = U.damp(F.upright, 0, 2, dt);
+    // arrived: close to the target and slow (with hysteresis, so it never flickers)
+    const dT = p5.Vector.dist(pos, gTarget), sp = vel.mag();
+    if (!F.gardenArrived && dT < 0.35 && sp < 0.3) F.gardenArrived = true;
+    else if (F.gardenArrived && (dT > 0.9 || sp > 1.2)) F.gardenArrived = false;
+    trailClock -= dt;
+    if (trailClock <= 0) { trail.unshift(F.pos.slice()); trail.length = 24; trailClock = 0.05; }
+  }
+
   function update(dt, input, active) {
     if (!F.ready || !active) return;
+    if (F.garden) { gardenUpdate(dt, input); return; }   // Round 02: inside the Memory Garden
     const FC = AG.CONFIG.flight, k = F.keys;
     // ---- ↑ (keyboard or touch): a SHORT press (released within FC.tapMax s) gives a small
     //      upward lift; HOLDING it smoothly boosts forward speed. It never starts the ending:
@@ -376,5 +463,5 @@ AG.Flight = (function () {
     return best;
   }
 
-  return Object.assign(F, { PHASES, phaseK, build, reset, resetMotion, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight, press });
+  return Object.assign(F, { PHASES, phaseK, build, reset, resetMotion, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight, press, enterGarden, exitGarden });
 })();

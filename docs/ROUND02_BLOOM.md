@@ -16,6 +16,14 @@ callbacks in `js/sketch.js`.
 - As it opens, p5-drawn petal symbols orbit it and pollen halos pulse around the anthers
   (`js/garden/r2Layer.js`). The preview shows the same layer.
 
+**She is in the garden:** her flight continues inside, through `AG.Flight`'s garden mode.
+- She glides in from the left of the view, slows down and settles beside the flower, then turns
+  from her flying pose to levitating.
+- ← → fly her round the flower; ↑ ↓ change her height.
+- As she comes close, the flower glows warmer, the petals facing her lean toward her, and the
+  motes drift to her.
+- A click on the heart before she has arrived waits for her.
+
 **Phase:** `AG.R2` (`js/garden/round2.js`) is Round 02's shared state. It derives the phase
 ENTER → APPROACH → AWAKEN → DRAG → BLOOM → TRANSFORM → EXIT → EXPLORE, shown in the HUD as
 "R02 · PHASE". The plan for the next phases is `docs/ROUND02_PLAN.md`.

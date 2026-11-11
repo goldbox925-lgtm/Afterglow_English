@@ -13,7 +13,7 @@
                   (the orbit is suspended while the flower is dragged)
      up()         release (the flower keeps what it reached)
      wheel(d)     zoom
-   draw(dt)       one frame
+   draw(dt, o)    one frame; o.CH (optional) = CharacterDirector's items: she is drawn in it
 
    p5.js used here: p.createVector / p5.Vector (picking ray), p.dist,
    p.constrain, p.createFramebuffer, p.createShader, p.model, p.blendMode.
@@ -153,11 +153,27 @@ AG.GardenScene = {
     }
 
     /* ---------- frame ---------- */
-    function draw(dt) {
+    /* the camera as the city renderer's character drawing expects it (pos, basis, fov, matrices) */
+    function camInfo() {
+      const V3 = U.v3, dir = V3.norm(V3.sub(cam.target, view.eye)), right = V3.norm(V3.cross(dir, [0, 1, 0])), up = V3.cross(right, dir);
+      return { pos: view.eye, target: cam.target, dir, right, up, fov: cam.fov, V: view.V, P: view.P };
+    }
+    /* Round 02: her (o.CH, CharacterDirector's items), drawn by the city renderer's own character
+       code with this scene's camera. Petals are translucent and drawn back to front without depth
+       writes, so she is drawn before them when she is behind the flower and after them in front. */
+    function drawHer(o) {
+      if (!o || !o.CH || !AG.Renderer || !AG.Renderer.drawCharacterWith) return;
+      AG.Renderer.drawCharacterWith(camInfo(), o.CH, flower.t, { warm: flower.prox });
+    }
+
+    function draw(dt, o) {
       init();
       camera();
       flower.update(dt, view.eye);
       const t = flower.t, col = flower.colors;
+      // is she behind the flower's centre (seen from the camera)?
+      const herPos = o && o.CH && o.CH.main && o.CH.main.anchorPos;
+      const herBehind = !!herPos && U.v3.len(U.v3.sub(herPos, view.eye)) > U.v3.len(U.v3.sub(flower.center, view.eye));
 
       sceneFB.begin();
       p.clear();
@@ -185,6 +201,7 @@ AG.GardenScene = {
       p.shader(SH.spr); common(SH.spr);
       SH.spr.setUniform('uKind', 1); SH.spr.setUniform('uStamA', flower.stamA); SH.spr.setUniform('uStamB', flower.stamB);
       p.model(stamGeo);
+      if (herBehind) { drawHer(o); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); }
       // petals: translucent, sorted back to front, two-sided, no depth writes
       p.blendMode(p.BLEND);
       p.shader(SH.petal); common(SH.petal);
@@ -205,6 +222,7 @@ AG.GardenScene = {
         p.translate(P.r0, P.y0, 0);           // move to its base: the pivot it rotates about
         p.rotate(-P.hinge, [0, 0, 1]);        // OPENING: rotates away from the centre about its base, driven by the drag
         p.rotate(-P.sway, [0, 0, 1]);         // idle organic sway about the same base (p.sin breathing + p.noise)
+        p.rotate(-P.lean, [0, 0, 1]);         // Round 02: the petals on her side lean toward her as she comes close
         p.scale(P.grow);                      // the petal grows a little as it unfolds (0.9 → 1.0), from its base
         SH.petal.setUniform('uA', [0, P.r0, P.L, P.W]);
         SH.petal.setUniform('uB', [P.pose.th, P.pose.k0, P.pose.cup, P.y0]);
@@ -215,6 +233,7 @@ AG.GardenScene = {
         p.pop();
       }
       p.pop();
+      if (herPos && !herBehind) { drawHer(o); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); }
       // glow sprites: core glow, anthers, motes
       p.blendMode(p.ADD);
       p.shader(SH.spr); common(SH.spr);

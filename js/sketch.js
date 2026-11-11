@@ -163,7 +163,7 @@
       AG.Renderer.white = U.damp(AG.Renderer.white || 0, white, 4, dt);
       AG.R2.update(dt);                       // Round 02's shared state and phase (js/garden/round2.js)
       // Round 02: inside the doorway the Memory Garden replaces the city image
-      if (AG.Garden.drawsScene()) AG.Garden.draw(playing ? dt : 0);
+      if (AG.Garden.drawsScene()) AG.Garden.draw(playing ? dt : 0, CH);
       else AG.Renderer.render(S, cam, F.animTime, rt, CH, F.animTime);
       AG.UI.update(dt, S, input);
       adapt(dt);

@@ -68,6 +68,9 @@ AG.CharacterDirector = (function () {
     if (st === 'AFTERGLOW') {
       if (cin && cin.name === 'liftoff') return cin.t < 1.2 ? ['J', 0] : cin.t < 3.4 ? ['D', 0.9] : ['G', 0.5, true];
       const Fl = AG.Flight;
+      // Round 02, inside the Memory Garden: flying in (back view), then levitating before the
+      // flower once she has arrived (the same cross-fade as every pose change)
+      if (Fl.garden) return Fl.gardenArrived ? ['E', 0.7] : ['G', 0.6];
       if (Fl.finale) return Fl.gliding ? ['G', 0.6] : ['E', 0];   // glide (back view, flying) → the ascent
       if (Fl.arc) {
         // ArrowUp is ascent, not a replay of her earlier suffering.
@@ -88,7 +91,8 @@ AG.CharacterDirector = (function () {
 
   /* a pose in the air during the ascension arc (faces the lens, stays readable) */
   function placeAir(P, id, at, S) {
-    const Fl = AG.Flight, a = Fl.ascT, meta = AG.CHARACTER_MANIFEST.poses[id];
+    // (in the Memory Garden she is fully weightless: the end of the arc, a = 12 s)
+    const Fl = AG.Flight, a = Fl.garden ? 12 : Fl.ascT, meta = AG.CHARACTER_MANIFEST.poses[id];
     P.mode = 'cyl'; P.air = true;
     const fs = Fl.state();
     const H = meta.fit === 'height' ? meta.size : meta.size * 0.75;
@@ -110,7 +114,7 @@ AG.CharacterDirector = (function () {
     const F = AG.FSM, cin = F.cinematic;
     const sink = meta.sink || 0;
     const exhausted = F.state === 'NUMBNESS' || F.state === 'FRACTURE' ? 1 : F.state === 'AWAKENING' ? 0.55 : 0.25;
-    if (F.state === 'AFTERGLOW' && !cin && (AG.Flight.arc || AG.Flight.finale) && (id === 'B' || id === 'C' || id === 'E')) return placeAir(P, id, at, S);
+    if (F.state === 'AFTERGLOW' && !cin && (AG.Flight.arc || AG.Flight.finale || AG.Flight.garden) && (id === 'B' || id === 'C' || id === 'E')) return placeAir(P, id, at, S);
     switch (id) {
       case 'A': case 'I': case 'B': case 'C': {
         P.anchorPos = V.add(spots.lie, [0, -sink, 0]);
