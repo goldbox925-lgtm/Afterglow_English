@@ -179,7 +179,7 @@ AG.GardenScene = {
       // receptacle (opaque, writes depth)
       p.blendMode(p.BLEND); gl.depthMask(true);
       p.shader(SH.petal); common(SH.petal);
-      SH.petal.setUniform('uKind', 1); SH.petal.setUniform('uCore', fl.core); SH.petal.setUniform('uCoreCol', col.core);
+      SH.petal.setUniform('uKind', 1); SH.petal.setUniform('uCore', fl.core); SH.petal.setUniform('uCoreCol', col.core); SH.petal.setUniform('uHeatCol', col.heat);
       p.push();
       flowerOrigin(fl);
       p.model(domeGeo);
@@ -187,7 +187,7 @@ AG.GardenScene = {
       // stamen filaments
       p.blendMode(p.ADD); gl.depthMask(false);
       p.shader(SH.spr); common(SH.spr);
-      SH.spr.setUniform('uKind', 1); SH.spr.setUniform('uStamA', fl.stamA); SH.spr.setUniform('uStamB', fl.stamB);
+      SH.spr.setUniform('uKind', 1); SH.spr.setUniform('uStamA', fl.stamA); SH.spr.setUniform('uStamB', fl.stamB); SH.spr.setUniform('uStamCol', col.stam);
       p.model(stamGeo);
       if (hooks && hooks.beforePetals) hooks.beforePetals();
       // petals: translucent, sorted back to front, two-sided, no depth writes
@@ -195,7 +195,7 @@ AG.GardenScene = {
       p.shader(SH.petal); common(SH.petal);
       SH.petal.setUniform('uKind', 0);
       SH.petal.setUniform('uBaseCol', col.base); SH.petal.setUniform('uBodyCol', col.body); SH.petal.setUniform('uTipCol', col.tip);
-      SH.petal.setUniform('uRimCol', col.rim); SH.petal.setUniform('uCoreCol', col.core);
+      SH.petal.setUniform('uRimCol', col.rim); SH.petal.setUniform('uCoreCol', col.core); SH.petal.setUniform('uHeatCol', col.heat); SH.petal.setUniform('uStamCol', col.stam);
       SH.petal.setUniform('uBloom', fl.bloom); SH.petal.setUniform('uAwake', fl.awakeK); SH.petal.setUniform('uCore', fl.core);
       SH.petal.setUniform('uVein', fl.vein); SH.petal.setUniform('uAlpha', 0.58 + 0.14 * fl.bloom);
       SH.petal.setUniform('uIri', fl.iri); SH.petal.setUniform('uEmit', fl.emit);

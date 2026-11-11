@@ -345,3 +345,9 @@ body.entered:not(.flying) #stage canvas { cursor: crosshair; }
 }
 .chip.r2 { margin-left: 6px; border-style: dashed; }
 .chip.r2.active { border-style: solid; color: #fff; border-color: var(--magenta); box-shadow: 0 0 10px rgba(255, 42, 158, 0.35); }
+
+/* Round 02 · how many of the five buildings have bloomed */
+#cityBloom { position: fixed; right: 18px; top: 18px; z-index: 14; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(243, 233, 255, 0.82);
+  padding: 5px 11px; border-radius: 12px; background: rgba(20, 10, 32, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); opacity: 0; transition: opacity 0.8s; pointer-events: none; }
+#cityBloom b { font-weight: 600; color: #fff; }
+body.garden #cityBloom { opacity: 1; }

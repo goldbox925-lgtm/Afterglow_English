@@ -283,6 +283,5 @@ into no-ops in the page.
 ## Not done yet (next phases)
 
 - No sound in the garden. The city's soundtrack keeps playing.
-- One flower only. Nothing else in the garden yet.
-EOF
-pkill -f "http.server 5500"; pkill -f "recv.py"; git status --short
+- The game now has five palettes of this flower, one per building (`js/garden/gardens.js`; see
+  phase 6 in `ROUND02_PLAN.md`). This preview keeps the default palette and has no city.

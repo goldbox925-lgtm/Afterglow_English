@@ -119,6 +119,7 @@ out vec4 outColor;
 uniform float uKind;
 uniform vec3 uBaseCol, uBodyCol, uTipCol, uRimCol, uCoreCol;   // p.lerpColor results (CPU)
 uniform float uBloom, uAwake, uCore, uVein, uAlpha, uSeed, uIri, uEmit;
+uniform vec3 uHeatCol, uStamCol;      // the flower's own warm light (palette)
 uniform vec3 uCenter; uniform float uScale;
 void main(){
   vec3 V = normalize(uCamPos - vWorld);
@@ -132,7 +133,7 @@ void main(){
   if (uKind > 0.5){
     // the golden receptacle: warm, bright toward its top, rim-lit
     float top = smoothstep(-0.2, 1.0, vN.y);
-    vec3 c = uCoreCol * (0.45 + 0.9 * uCore * top) + vec3(1.0, 0.55, 0.2) * fr * (0.3 + 0.5 * uCore);
+    vec3 c = uCoreCol * (0.45 + 0.9 * uCore * top) + uHeatCol * fr * (0.3 + 0.5 * uCore);
     outColor = vec4(c, 1.0);
     return;
   }
@@ -156,7 +157,7 @@ void main(){
   vec3 Lk = normalize(vec3(0.35, 0.85, 0.4)), keyCol = vec3(0.95, 0.9, 1.0);
   float wrapK = clamp((dot(N, Lk) + 0.55) / 1.55, 0.0, 1.0);
   float wrapC = clamp((dot(N, Lc) + 0.6) / 1.6, 0.0, 1.0);
-  vec3 coreLightCol = vec3(1.0, 0.55, 0.2) * uCore * coreAtt;
+  vec3 coreLightCol = uHeatCol * uCore * coreAtt;
   vec3 diffuse = amb * 0.55 + keyCol * wrapK * 0.5 + coreLightCol * wrapC * 1.05;
   // translucency: light from BEHIND the petal glows through it (thinner in the middle)
   float thin = 1.0 - 0.6 * smoothstep(0.55, 1.0, av);
@@ -175,9 +176,9 @@ void main(){
   float vein = (mid + fine * 0.85) * flow;
   // ---- rims: the edge and tip glow softly (not right at the base, where ten petals overlap) ----
   float rim = (smoothstep(0.8, 1.0, av) * 0.8 + smoothstep(0.9, 1.0, u) * 0.5) * smoothstep(0.08, 0.35, u);
-  vec3 veinCol = mix(uRimCol, vec3(1.0, 0.68, 0.38), smoothstep(0.5, 0.0, u) * 0.6);
+  vec3 veinCol = mix(uRimCol, uStamCol, smoothstep(0.5, 0.0, u) * 0.6);
   vec3 emit = (uRimCol * rim * 0.45 + veinCol * vein * uVein * 1.25 + uBodyCol * 0.12) * uEmit
-            + vec3(1.0, 0.5, 0.15) * exp(-u * 5.5) * uCore * 0.35;
+            + uHeatCol * exp(-u * 5.5) * uCore * 0.35;
   vec3 c = col * (diffuse + trans) + emit + sheen + vec3(1.0, 0.92, 0.98) * spec;
   // ---- translucency (alpha): thin in the middle, denser at the edges and at grazing angles ----
   float a = clamp(uAlpha * (0.5 + 0.32 * fr + 0.22 * rim + 0.12 * vein + 0.1 * (n1 - 0.5)), 0.0, 0.94);
@@ -197,7 +198,7 @@ uniform vec4 uSpr[64];       // kind 0: xyz + size
 uniform vec4 uSprC[64];      // kind 0: rgb + alpha
 uniform vec4 uStamA[18];     // kind 1: filament base xyz + width
 uniform vec4 uStamB[18];     // kind 1: filament tip xyz + brightness
-uniform vec3 uCenter; uniform float uScale, uDisc;
+uniform vec3 uCenter, uStamCol; uniform float uScale, uDisc;
 out vec2 vUv; out vec3 vCol; out float vA; out float vKind;
 void main(){
   int i = int(aPosition.x + 0.5);
@@ -215,7 +216,7 @@ void main(){
     vec2 d = vb.xy - va.xy; float dl = length(d); vec2 dn = dl > 1e-6 ? d / dl : vec2(0.0, 1.0), pn = vec2(-dn.y, dn.x);
     float t = aTexCoord.x * 0.5 + 0.5;
     vec4 vp = mix(va, vb, t); vp.xy += pn * aTexCoord.y * a.w * mix(1.0, 0.45, t);
-    vUv = vec2(t, aTexCoord.y); vCol = vec3(1.0, 0.68, 0.3); vA = b.w * 0.75;
+    vUv = vec2(t, aTexCoord.y); vCol = uStamCol; vA = b.w * 0.75;
     gl_Position = uProj * vp;
   } else {
     // ground disc in the XZ plane under the flower

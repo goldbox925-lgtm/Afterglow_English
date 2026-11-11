@@ -41,6 +41,9 @@ window.AG = window.AG || {};
 AG.BloomFlower = (function () {
   const U = AG.U;
   const OUTER = 5, INNER = 5, PETALS = OUTER + INNER, STAMENS = 18, MAX_SPR = 64, MAX_MOTES = 40;
+  /* the colours the single-flower preview (bloom.html) keeps; each building passes its own */
+  const DEFAULT_PALETTE = { bud: [150, 125, 235], body: [255, 120, 205], tipA: [140, 160, 255], tipB: [110, 220, 255], warm: [255, 140, 60], core: [255, 196, 110],
+    heat: [1.0, 0.55, 0.2], stam: [1.0, 0.68, 0.34], anther: [1.0, 0.45, 0.08], motes: [[1.0, 0.55, 0.85], [0.75, 0.6, 1.0], [0.45, 0.9, 1.0], [1.0, 0.82, 0.5]], yaw: 0.12, breath: 0.018 };
 
   function create(p, opts) {
     const o = Object.assign({ center: [0, 0, 0], scale: 4 }, opts || {});
@@ -87,11 +90,22 @@ AG.BloomFlower = (function () {
     }
 
     /* ---- colours (p.lerpColor): cool lavender → pink → warm gold as it blooms ---- */
-    const C = {
-      lav: p.color(150, 125, 235), pink: p.color(255, 120, 205), gold: p.color(255, 196, 110),
-      cyan: p.color(110, 220, 255), blue: p.color(140, 160, 255), white: p.color(255, 236, 245), amber: p.color(255, 140, 60)
-    };
+    const C = {};
+    let MOTE_COLS = DEFAULT_PALETTE.motes, heat = DEFAULT_PALETTE.heat, stam = DEFAULT_PALETTE.stam, anther = DEFAULT_PALETTE.anther;
+    /* the palette: the stops p.lerpColor moves between as it blooms, the light colours the shaders
+       use, its motes, and how it moves (a real p.rotate / p.scale difference between the flowers) */
+    function setPalette(pal) {
+      const q = Object.assign({}, DEFAULT_PALETTE, pal || {});
+      for (const k of ['bud', 'body', 'tipA', 'tipB', 'warm', 'core']) C[k] = p.color(q[k][0], q[k][1], q[k][2]);
+      MOTE_COLS = q.motes; heat = q.heat; stam = q.stam; anther = q.anther; F.yawAmp = q.yaw; F.breathAmp = q.breath;
+      F.motes.length = 0;
+    }
+    setPalette(o.palette);
     const rgb = (c, k) => [p.red(c) / 255 * (k || 1), p.green(c) / 255 * (k || 1), p.blue(c) / 255 * (k || 1)];
+
+    /* what a building remembers of its flower when she leaves for another one */
+    function snapshot() { return { bloom: F.bloom, target: F.target, awake: F.awake, awakeK: F.awakeK, full: F.full, clicks: F.clicks }; }
+    function restore(s) { reset(); Object.assign(F, s); }
 
     function reset() {
       F.bloom = 0; F.target = 0; F.awake = false; F.awakeK = 0; F.pulseT = 99; F.dragging = false; F.motes.length = 0; F.clicks = 0;
@@ -160,10 +174,10 @@ AG.BloomFlower = (function () {
       F.growPulseT += dt; F.fullPulseT += dt;
       if (!F.full && b >= 0.995) { F.full = true; F.fullPulseT = 0; }
       const env = (x, len) => (x < len ? p.sin(Math.PI * x / len) : 0);
-      const growTo = p.map(b, 0, 1, 0.94, 1.0) * (1 + 0.05 * env(F.growPulseT, 0.7) + 0.08 * env(F.fullPulseT, 1.4) + 0.018 * p.sin(t * 1.3) * U.smooth(0.9, 1, b));
+      const growTo = p.map(b, 0, 1, 0.94, 1.0) * (1 + 0.05 * env(F.growPulseT, 0.7) + 0.08 * env(F.fullPulseT, 1.4) + F.breathAmp * p.sin(t * 1.3) * U.smooth(0.9, 1, b));
       F.grow = p.lerp(F.grow, growTo * F.extScale, 1 - Math.exp(-12 * dt));
       // a slow organic turn of the whole flower about its axis (p.rotate, ±3.5°, p.noise)
-      F.idleYaw = (p.noise(t * 0.08, 3.3) - 0.5) * 0.12 * life;
+      F.idleYaw = (p.noise(t * 0.08, 3.3) - 0.5) * F.yawAmp * life;
       const sg = sc * F.grow;
       // petals: each eases through its own window, breathes and flutters a little differently
       for (let i = 0; i < PETALS; i++) {
@@ -200,14 +214,15 @@ AG.BloomFlower = (function () {
       }
       // colours
       const warm = U.smooth(0.55, 1.0, b);
-      const body = p.lerpColor(C.lav, C.pink, U.smooth(0.05, 0.65, b));
+      const body = p.lerpColor(C.bud, C.body, U.smooth(0.05, 0.65, b));
       F.colors = {
-        base: rgb(p.lerpColor(p.lerpColor(C.lav, C.pink, b), C.amber, 0.2 + 0.5 * warm), 0.8),
+        base: rgb(p.lerpColor(p.lerpColor(C.bud, C.body, b), C.warm, 0.2 + 0.5 * warm), 0.8),
         body: rgb(body),
-        tip: rgb(p.lerpColor(C.blue, C.cyan, U.smooth(0.2, 0.8, b))),
-        rim: rgb(p.lerpColor(C.lav, C.pink, 0.4 + 0.6 * b), 0.9 + 0.6 * b),
-        core: rgb(p.lerpColor(C.pink, C.gold, 0.6 + 0.4 * b), 1.0),
-        ring: rgb(p.lerpColor(C.lav, C.pink, b), 0.6)
+        tip: rgb(p.lerpColor(C.tipA, C.tipB, U.smooth(0.2, 0.8, b))),
+        rim: rgb(p.lerpColor(C.bud, C.body, 0.4 + 0.6 * b), 0.9 + 0.6 * b),
+        core: rgb(p.lerpColor(C.body, C.core, 0.6 + 0.4 * b), 1.0),
+        ring: rgb(p.lerpColor(C.bud, C.body, b), 0.6),
+        heat, stam
       };
       // core intensity: faint inside the bud, glowing when awake, radiant at full bloom, + click pulse
       const pulse = Math.exp(-F.pulseT * 3.0);
@@ -247,7 +262,6 @@ AG.BloomFlower = (function () {
 
     /* floating motes: the existing AG.LightParticle class (p5.Vector + p.noise drift, dt) */
     let carry = 0;
-    const MOTE_COLS = [[1.0, 0.55, 0.85], [0.75, 0.6, 1.0], [0.45, 0.9, 1.0], [1.0, 0.82, 0.5]];
     function updateMotes(dt, t, b) {
       const rate = (F.awake ? 1.5 : 0.4) + 26 * Math.pow(b, 1.2) + 8 * F.prox;   // busier as it opens, and as she comes near
       carry += dt * rate;
@@ -281,8 +295,8 @@ AG.BloomFlower = (function () {
       let n = 0;
       const put = (x, y, z, size, r, g, bl, a) => { if (n >= MAX_SPR) return; F.spr.set([x, y, z, size], n * 4); F.sprC.set([r, g, bl, a], n * 4); n++; };
       const cc = F.colors.core;
-      put(F.center[0], F.center[1] + (0.26 + 0.2 * F.bloom) * sc * F.grow, F.center[2], (0.2 + 0.22 * Math.min(1.6, F.core)) * sc, 1.0, 0.55, 0.15, 0.12 + 0.2 * Math.min(1.6, F.core));
-      for (const S of stamens) put(S.tip[0], S.tip[1], S.tip[2], 0.05 * sc * (0.5 + 0.6 * emerge), 1.0, 0.45, 0.08, 0.25 + 0.8 * emerge);
+      put(F.center[0], F.center[1] + (0.26 + 0.2 * F.bloom) * sc * F.grow, F.center[2], (0.2 + 0.22 * Math.min(1.6, F.core)) * sc, heat[0], heat[1], heat[2] * 0.75, 0.12 + 0.2 * Math.min(1.6, F.core));
+      for (const S of stamens) put(S.tip[0], S.tip[1], S.tip[2], 0.05 * sc * (0.5 + 0.6 * emerge), anther[0], anther[1], anther[2], 0.25 + 0.8 * emerge);
       for (let i = 0; i < F.motes.length; i++) {
         F.motes[i].display(0, tmpP, tmpC);
         put(tmpP[0], tmpP[1], tmpP[2], tmpC[3], tmpC[0], tmpC[1], tmpC[2], tmpP[3] * 0.9);
@@ -296,7 +310,7 @@ AG.BloomFlower = (function () {
       return b < 0.15 ? (F.awake ? 'Awakened bud' : 'Closed bud') : b < 0.45 ? 'Awakening' : b < 0.85 ? 'Opening' : 'Full bloom';
     }
 
-    return Object.assign(F, { reset, update, pick, heart, pointerDown, pointerDrag, pointerUp, awaken, setVisitor, stageName, PETALS, STAMENS });
+    return Object.assign(F, { reset, snapshot, restore, setPalette, update, pick, heart, pointerDown, pointerDrag, pointerUp, awaken, setVisitor, stageName, PETALS, STAMENS });
   }
 
   return { create };

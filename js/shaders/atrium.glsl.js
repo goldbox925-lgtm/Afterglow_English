@@ -56,6 +56,7 @@ out vec4 outColor;
 uniform vec3 uWarmPos, uStripCol, uKeyCol; uniform float uWarm, uProx;
 uniform float uEnergy, uFrontY, uBreath;       // the transformation (stage B): how far the energy has risen
 uniform float uLight, uLightR;                 // (stage A): the golden wave, which crosses the platform first
+uniform vec3 uAccent, uRimCol;                 // the building's own warm light and planter rims
 void main(){
   vec3 N = normalize(vN), V = normalize(uCamPos - vWorld);
   if (dot(N, V) < 0.0) N = -N;
@@ -69,22 +70,22 @@ void main(){
   vec3 Lw = uWarmPos - vWorld; float dw = length(Lw); Lw /= dw;
   float att = uWarm / (1.0 + dw * dw * 0.012);
   float dwarm = max(dot(N, Lw), 0.0) * 0.7 + 0.3;
-  vec3 c = base * (amb + uKeyCol * dk * 0.35 + vec3(1.0, 0.6, 0.3) * dwarm * att * 0.9);
+  vec3 c = base * (amb + uKeyCol * dk * 0.35 + uAccent * dwarm * att * 0.9);
   // soft highlights: the key light and the flower's warm light
   c += uKeyCol * pow(max(dot(N, normalize(Lk + V)), 0.0), gloss) * (mat < 0.5 ? 0.9 : 0.6);
-  c += vec3(1.0, 0.7, 0.45) * pow(max(dot(N, normalize(Lw + V)), 0.0), gloss * 0.5) * att * (mat > 0.5 && mat < 1.5 ? 0.35 : 1.8);
+  c += mix(uAccent, vec3(1.0), 0.3) * pow(max(dot(N, normalize(Lw + V)), 0.0), gloss * 0.5) * att * (mat > 0.5 && mat < 1.5 ? 0.35 : 1.8);
   // fresnel rim in lavender (polished edges catch the room's light)
   float fr = pow(1.0 - max(dot(N, V), 0.0), 4.0);
   c += vec3(0.6, 0.5, 0.95) * fr * 0.35;
   // integrated light strips
   float strip = vData.y;
   // the platform's strips are gold, the planters' rims pink, the architecture's follow uStripCol
-  vec3 sc = mat > 0.5 && mat < 1.5 ? vec3(1.0, 0.68, 0.32) : mat > 2.5 ? vec3(1.0, 0.45, 0.8) : uStripCol;
+  vec3 sc = mat > 0.5 && mat < 1.5 ? uAccent : mat > 2.5 ? uRimCol : uStripCol;
   // STAGE B: energy climbs the structure from the floor. Behind the front the strips turn gold and
   // settle to a lower level, so the pulses running up them read as light moving; the metal warms
   // with them, and a bright front marks how far the energy has reached
   float below = uEnergy > 0.001 ? smoothstep(uFrontY + 0.5, uFrontY - 3.0, vWorld.y) * uEnergy : 0.0;
-  vec3 gold = vec3(1.0, 0.66, 0.3);
+  vec3 gold = uAccent;
   c += mix(sc, gold, below) * strip * mix(2.6 + 0.4 * sin(uTime * 0.8 + vData.z * 30.0), 1.1, below) * uBreath;
   if (uEnergy > 0.001){
     float pulse = pow(fract(vWorld.y * 0.12 - uTime * 0.55 + vData.z * 7.0), 5.0);
@@ -95,14 +96,14 @@ void main(){
   // the dais glows from within round the flower: a warm gold light in its pearl top
   if (mat > 0.5 && mat < 1.5 && N.y > 0.5){
     float rr = length(vWorld.xz);
-    c += vec3(1.0, 0.62, 0.3) * exp(-rr * rr / 12.0) * (0.1 + 0.16 * uWarm) + vec3(0.75, 0.55, 1.0) * 0.03;
-    c += vec3(1.0, 0.75, 0.45) * exp(-pow((rr - 3.2) * 6.0, 2.0)) * 0.22 * uWarm;          // an inner ring of light
+    c += uAccent * exp(-rr * rr / 12.0) * (0.1 + 0.16 * uWarm) + vec3(0.75, 0.55, 1.0) * 0.03;
+    c += mix(uAccent, vec3(1.0), 0.3) * exp(-pow((rr - 3.2) * 6.0, 2.0)) * 0.22 * uWarm;          // an inner ring of light
     // STAGE A starts here: the wave crosses the platform before the floor. Nothing is added
     // right under the flower, which must not wash out
     if (uLight > 0.001){
       float lit = smoothstep(uLightR, uLightR - 5.0, rr) * smoothstep(3.0, 8.0, rr) * uLight;
       float wave = exp(-pow((rr - uLightR) * 0.55, 2.0)) * smoothstep(3.0, 6.0, rr) * uLight * (1.0 - smoothstep(0.75, 1.0, uLight));
-      c += vec3(1.0, 0.64, 0.28) * (lit * 0.2 + wave * 0.75) * uBreath;
+      c += uAccent * (lit * 0.2 + wave * 0.75) * uBreath;
     }
   }
   c = haze(c, vWorld);
@@ -117,7 +118,7 @@ AG.SHADERS.atriumGlass = {
 in vec3 vWorld; in vec3 vN; in vec2 vUv; in vec4 vData;
 out vec4 outColor;
 uniform vec3 uTintA, uTintB; uniform float uProx;
-uniform vec3 uWinA, uWinB; uniform float uWin, uDome, uBreath;     // the transformation: panes light as windows, the dome glows
+uniform vec3 uWinA, uWinB, uAccent, uRimCol; uniform float uWin, uDome, uBreath;     // the transformation: panes light as windows, the dome glows
 void main(){
   vec3 N = normalize(vN), V = normalize(uCamPos - vWorld);
   float ndv = abs(dot(N, V)), fr = pow(1.0 - ndv, 3.0);
@@ -141,7 +142,7 @@ void main(){
   float on = smoothstep(th, th + 0.1, uWin) * (1.0 - vData.x);
   vec3 em = mix(uWinA, uWinB, hash11(vData.z * 53.0 + 1.7)) * on * (1.0 - 0.45 * dot(pq, pq)) * (0.12 + 0.025 * sin(uTime * 1.3 + th * 30.0));
   float high = smoothstep(14.0, 44.0, vWorld.y);
-  em += mix(vec3(1.0, 0.42, 0.78), vec3(1.0, 0.68, 0.32), high) * uDome * high * mix(0.14, 0.5, vData.x);
+  em += mix(uRimCol, uAccent, high) * uDome * high * mix(0.14, 0.5, vData.x);
   outColor = vec4(c * a + c * 0.25 * edge + em * uBreath, a);
 }
 `
@@ -154,6 +155,7 @@ in vec3 vWorld; in vec3 vN; in vec2 vUv; in vec4 vData;
 out vec4 outColor;
 uniform float uProx, uPool, uRings; uniform vec3 uInlayCol, uPoolCol;
 uniform float uLight, uLightR, uBreath;        // the transformation (stage A): the golden light and how far it has spread
+uniform vec3 uAccent;
 void main(){
   vec3 V = normalize(uCamPos - vWorld);
   float fr = pow(1.0 - max(V.y, 0.0), 5.0);
@@ -172,7 +174,7 @@ void main(){
   // STAGE A: golden light spreads across the floor from the flower: a soft front, the inlays and
   // the stone joints lit behind it
   if (uLight > 0.001){
-    vec3 gold = vec3(1.0, 0.64, 0.28);
+    vec3 gold = uAccent;
     float lit = smoothstep(uLightR, uLightR - 6.0, r) * uLight;
     float head = exp(-pow((r - uLightR) * 0.5, 2.0)) * uLight * (1.0 - smoothstep(0.75, 1.0, uLight));
     em += gold * (lit * (0.12 + 1.8 * (rings + spokes * 0.6) * flow + 0.4 * joint) + head * 1.2) * uBreath;
@@ -253,7 +255,7 @@ void main(){
   frag: AG.SHADERS.header + AG.SHADERS.common + AG.SHADERS.atriumHaze + `
 in vec2 vUv; in vec4 vData; in float vNear, vClear; in vec3 vWorld, vN;
 out vec4 outColor;
-uniform vec3 uColA, uColB, uColC, uGoldC;
+uniform vec3 uColA, uColB, uColC, uGoldC, uLeafTint;
 uniform float uProx, uBloom, uBreath, uGold, uGoldR, uRippleR, uRippleA;
 void main(){
   if (vClear < 0.999){
@@ -278,8 +280,9 @@ void main(){
   } else if (kind < 1.5){                                          // leaf: olive, a lit midrib and side veins
     float rib = exp(-across * across * 90.0);
     float veins = smoothstep(0.82, 1.0, sin((vUv.y * 11.0 - across * 3.0) * 3.14159));
-    surf = mix(vec3(0.2, 0.32, 0.13), vec3(0.6, 0.62, 0.18), vUv.y * 0.6 + hue * 0.4);
+    surf = mix(vec3(0.2, 0.32, 0.13), vec3(0.6, 0.62, 0.18), vUv.y * 0.6 + hue * 0.4) * uLeafTint;
     em = vec3(0.7, 0.75, 0.25) * (rib * 0.4 + veins * 0.08) + mix(vec3(0.2, 0.3, 0.12), vec3(0.5, 0.48, 0.14), vUv.y) * 0.3;
+    em *= uLeafTint;
   } else if (kind < 2.5){                                          // flower: a deep throat, a light rim
     float shade = smoothstep(0.0, 1.0, vUv.y);
     surf = pal * (0.3 + 0.45 * shade);

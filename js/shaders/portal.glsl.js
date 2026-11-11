@@ -42,8 +42,9 @@ void main(){
 in vec2 vUv; in vec3 vW;
 out vec4 outColor;
 uniform float uKind; uniform float uOpen; uniform float uNear;
+uniform vec3 uPalA, uPalB, uPalGold, uPalCool;
 void main(){
-  vec3 pink = vec3(1.0, 0.42, 0.78), lav = vec3(0.62, 0.5, 1.0), gold = vec3(1.0, 0.62, 0.22), cyan = vec3(0.45, 0.85, 1.0);
+  vec3 pink = uPalA, lav = uPalB, gold = uPalGold, cyan = uPalCool;      // the building's own colours
   vec3 c;
   if (uKind < 0.5){
     // arched opening (half-size units): straight sides from y = -1 up to y = 0, then a half

@@ -29,7 +29,9 @@
 window.AG = window.AG || {};
 
 AG.Botanical = {
-  create(p, B) {
+  /* params (per building): { floret, length, curl } scale the flowers' size, the clusters' length and how much the paths curl */
+  create(p, B, params) {
+    const PR = Object.assign({ floret: 1, length: 1, curl: 1 }, params || {});
     const TAU = Math.PI * 2, GOLDEN = 2.399963;
     let lod = 0;                                                       // 1: flowers seen only from afar have no wing petals
     const DOWN = p.createVector(0, -1, 0), UP = p.createVector(0, 1, 0), XAXIS = p.createVector(1, 0, 0);
@@ -42,7 +44,7 @@ AG.Botanical = {
       const pos = start.copy(), dir = dir0.copy().setMag(step), pts = [pos.copy()];
       for (let i = 1; i <= n; i++) {
         const t = i / n;
-        const cx = (p.noise(o.seed, t * 2.4) - 0.5) * o.curl * step * 2, cz = (p.noise(o.seed + 9, t * 2.4) - 0.5) * o.curl * step * 2;
+        const curl = o.curl * PR.curl, cx = (p.noise(o.seed, t * 2.4) - 0.5) * curl * step * 2, cz = (p.noise(o.seed + 9, t * 2.4) - 0.5) * curl * step * 2;
         dir.add(cx, 0, cz);
         dir.lerp(target.x * step, target.y * step, target.z * step, o.pull).setMag(step);
         pos.add(dir);
@@ -108,8 +110,8 @@ AG.Botanical = {
     }
 
     /* a flower cluster: dense and wide at its base, narrowing to buds at its tip */
-    function raceme(start, len, ph, hue0, arc0, up) {
-      const seed = p.random(1000), axis = path(start, up ? UP : DOWN, len, { step: 0.17, curl: 0.35, pull: 0.25, seed, up });
+    function raceme(start, len0, ph, hue0, arc0, up) {
+      const len = len0 * PR.length, seed = p.random(1000), axis = path(start, up ? UP : DOWN, len, { step: 0.17, curl: 0.35, pull: 0.25, seed, up });
       const n = axis.length, sw = (f) => (up ? 0.02 : swayOf(arc0 + f * len));
       tube(axis, 0.014, 0.004, ph, sw);
       for (let s = 1; s < n; s++) {
@@ -117,7 +119,7 @@ AG.Botanical = {
         for (let w = 0; w < whorl; w++) {
           const a = s * GOLDEN + w * TAU / whorl + p.random(-0.25, 0.25), o = p.createVector(p.cos(a), 0, p.sin(a));
           const c = axis[s].copy().add(o.x * 0.42 * taper, p.random(-0.03, 0.03), o.z * 0.42 * taper);
-          const size = p.lerp(0.3, 0.09, Math.pow(t, 1.3)) * p.random(0.85, 1.15);
+          const size = p.lerp(0.3, 0.09, Math.pow(t, 1.3)) * p.random(0.85, 1.15) * PR.floret;
           let hue = p.constrain(hue0 + (p.noise(seed, t * 2) - 0.5) * 0.6 + p.random(-0.06, 0.06), 0, 1);
           if (p.random() < 0.04) hue = 1.2;
           floret(c, o, size, ph, hue, sw(t));

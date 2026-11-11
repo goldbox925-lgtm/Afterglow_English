@@ -45,11 +45,11 @@ in vec3 vWorld; in vec2 vUv; in vec4 vData;
 out vec4 outColor;
 uniform vec4 uStage; uniform float uE, uBreath, uWin, uReach, uHeight, uInterior, uFade;
 uniform vec3 uOrigin; uniform vec2 uGrid;      // column spacing, storey height (metres)
-uniform vec3 uWinA, uWinB;                     // window colours, 0..1 RGB (p.lerpColor by transform, js/garden/living.js)
+uniform vec3 uWinA, uWinB, uPalA, uPalB, uPalGold, uPalCool;                     // window colours, 0..1 RGB (p.lerpColor by transform, js/garden/living.js)
 void main(){
   vec2 m = vUv;
   float A = uStage.x, B = uStage.y, D = uStage.w;
-  vec3 gold = vec3(1.0, 0.62, 0.24), pink = vec3(1.0, 0.42, 0.78), cyan = vec3(0.4, 0.82, 1.0), lav = vec3(0.62, 0.5, 1.0);
+  vec3 gold = uPalGold, pink = uPalA, cyan = uPalCool, lav = uPalB;      // the site's own colours
   // A: golden light spreading from its origin
   float d = distance(vWorld, uOrigin);
   float front = A * uReach;

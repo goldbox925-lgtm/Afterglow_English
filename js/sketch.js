@@ -79,7 +79,7 @@
       AG.ScreenWords.init(p);
       AG.Story.bindEvents();
       AG.Garden.init(p);
-      AG.R2.init(p); AG.Living.init(p);       // Round 02's data streams and the building's transformation
+      AG.Gardens.init(p); AG.R2.init(p); AG.Living.init(p);       // Round 02's data streams and the building's transformation
       AG.UI.setLoading('Generating the city…', false);
       AG.CharacterAssets.load(p, 'A');
       setTimeout(() => {

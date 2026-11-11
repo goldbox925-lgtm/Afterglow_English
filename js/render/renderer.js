@@ -513,18 +513,23 @@ AG.Renderer = (function () {
   /* Round 02: the doorway of light on its building and the beacon above it (js/garden/garden.js;
      nothing is drawn in Round 01). Additive; the doorway is depth-tested, the beacon is not. */
   function drawPortal(F) {
-    const P = AG.Garden && AG.Garden.portalDraw();
-    if (!P || !AG.SHADERS.portal) return;
+    const list = AG.Garden && AG.Garden.portalDraw();
+    if (!list || !AG.SHADERS.portal) return;
     if (!SH.portal) SH.portal = makeShader(AG.SHADERS.portal);
     const sh = SH.portal;
     p.blendMode(p.ADD); gl.depthMask(false); p.shader(sh); common(sh, F);
-    sh.setUniform('uOpen', P.open); sh.setUniform('uNear', P.near); sh.setUniform('uN', P.n);
-    gl.enable(gl.DEPTH_TEST);
-    sh.setUniform('uKind', 0); sh.setUniform('uC', P.c); sh.setUniform('uSize', [P.w / 2, P.h / 2]);
-    p.model(quad);
-    gl.disable(gl.DEPTH_TEST);
-    sh.setUniform('uKind', 1); sh.setUniform('uC', P.beacon); sh.setUniform('uSize', [9, 320]);
-    p.model(quad);
+    for (const P of list) {                                       // one per building (js/garden/gardens.js)
+      sh.setUniform('uPalA', P.col.a); sh.setUniform('uPalB', P.col.b); sh.setUniform('uPalGold', P.col.gold); sh.setUniform('uPalCool', P.col.cool);
+      sh.setUniform('uOpen', P.open); sh.setUniform('uNear', P.near); sh.setUniform('uN', P.n);
+      gl.enable(gl.DEPTH_TEST);
+      sh.setUniform('uKind', 0); sh.setUniform('uC', P.c); sh.setUniform('uSize', [P.w / 2, P.h / 2]);
+      p.model(quad);
+      if (P.beaconK > 0.002) {
+        gl.disable(gl.DEPTH_TEST);
+        sh.setUniform('uOpen', P.beaconK); sh.setUniform('uKind', 1); sh.setUniform('uC', P.beacon); sh.setUniform('uSize', [P.beaconW, P.beaconH]);
+        p.model(quad);
+      }
+    }
     gl.enable(gl.DEPTH_TEST);
   }
 
@@ -540,6 +545,9 @@ AG.Renderer = (function () {
     const aspect = p.width / p.height;
     const F = { t, at: at !== undefined ? at : t, cam, hero: [hero.fig.x, hero.fig.y, hero.fig.z] };
     F.spots = AG.Restoration.uniforms(F.at);
+    // Round 02's finale: the five buildings' colours in the city's sky glow (nothing before all five complete)
+    const FN = AG.Gardens && AG.Gardens.finaleLook(F.at);
+    if (FN) S = Object.assign({}, S, { cityGlow: S.cityGlow.map((v, i) => v + FN.col[i] * FN.k * 0.32), horizon: S.horizon.map((v, i) => v + FN.col[i] * FN.k * 0.1) });
     if (CH && CH.flash > 0.02) S = Object.assign({}, S, { exposure: S.exposure + CH.flash * 0.6 });
     // near-field lights: fallen sign, door, the city's returning warmth, lightning
     const sA = S.heroA * 1.7, sB = S.heroB * 1.6;

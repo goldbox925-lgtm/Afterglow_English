@@ -1,57 +1,61 @@
 /* =====================================================================
-   Round 02 · Phase 4 — the living architecture (AG.Living)
+   Round 02 · the living architecture (AG.Living)
    ---------------------------------------------------------------------
-   The building's transformation, a CONSEQUENCE of the flower reaching
-   100 %. It has no state of its own: every value that moves is read
-   from AG.R2's data streams each frame (transform, stage A–E,
-   sinceBloom, glow, particles; js/garden/round2.js).
+   Each building's transformation, a CONSEQUENCE of its flower reaching
+   100 %. Every value that moves is read from that site's record in
+   AG.Gardens (transform, stage A–E, sinceBloom, windows; advanced by
+   js/garden/round2.js).
 
-   What it builds (once, deterministically per city, when the
-   transformation starts: p.randomSeed(seed from the building)):
+   What it builds (once per site, deterministically from the building,
+   when its transformation starts: p.randomSeed(seed from the building)):
      (inside the Memory Garden the transformation plays on the glass
      atrium itself: js/garden/atrium.js reads the same stages)
-     FACADE  outside in the city: the same wall program on the
+     FACADE   outside in the city: the same wall program on the
               building's four REAL faces (its lowest shaft, from the
               city's own geometry), light vines grown on those faces from
               the ground and from the doorway's sides
      ROOFTOP  a giant iridescent flower on the roof: another
-              AG.BloomFlower, drawn by the existing flower renderer
-              (GardenScene.drawFlowerBody, the same shaders and the same
-              p.rotate / p.scale petal transforms), opening with stage D
-   Stages (AG.R2.stage, each 0..1, overlapping so nothing is abrupt):
-     A awakening   golden light spreads from the flower through the atrium
+              AG.BloomFlower in that site's palette, drawn by the existing
+              flower renderer (GardenScene.drawFlowerBody, the same
+              shaders and the same p.rotate / p.scale petal transforms),
+              opening with stage D
+   Stages (site.stage, each 0..1, overlapping so nothing is abrupt):
+     A awakening   a wave of light spreads from the flower through the atrium
      B energy      lines travel up the structure; windows begin to light
-     C growth      pink / cyan / lavender vines climb the facade
+     C growth      vines in the site's colours climb the facade
      D rooftop     the giant flower opens on the roof; light from above
      E living      everything breathes (p.sin), the vines' light flows
+
+   Shaders and the flower meshes are shared by every site. Only each
+   site's facade mesh is its own; it is built when needed and freed on
+   a reset.
    ===================================================================== */
 window.AG = window.AG || {};
 
 AG.Living = (function () {
   const U = AG.U, V3 = U.v3;
-  let p = null, SH = null, built = null, C = null;
+  let p = null, SH = null;
   const L = {};
+  const CFAR = 1100;              // metres: beyond this a site's rising particles rest
 
-  function init(inst) {
-    p = inst;
-    C = { pink: p.color(255, 120, 205), lav: p.color(165, 140, 255), cyan: p.color(110, 220, 255), gold: p.color(255, 196, 110) };
-  }
+  function init(inst) { p = inst; }
   function shaders() {
     if (SH) return SH;
     SH = { wall: p.createShader(AG.SHADERS.livingWall.vert, AG.SHADERS.livingWall.frag), vine: p.createShader(AG.SHADERS.livingVine.vert, AG.SHADERS.livingVine.frag) };
     return SH;
   }
   const NORMALS = [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
+  const colours = (cfg) => { const c = cfg.city, k = (v) => p.color(v[0], v[1], v[2]); return { pink: k(c.a), lav: k(c.b), cyan: k(c.cool), gold: k(c.gold) }; };
 
-  /* ---------------- build (once per transformation) ---------------- */
-  function build() {
-    const P = AG.Garden.portal, sh = P.shaft || P.box.shafts[0], b = P.box;
+  /* ---------------- build (once per site's transformation) ---------------- */
+  function build(site) {
+    const P = site.portal, sh = P.shaft || P.box.shafts[0], b = P.box;
     const seed = Math.floor(Math.abs(b.cx * 73.13 + b.cz * 19.71)) % 99991 + 7;
     p.randomSeed(seed);
     const nz = (seed % 997) * 0.731;
 
     // ---- FACADE (city coordinates): the doorway shaft's four REAL faces ----
-    const FW = new AG.GeometryBuilder('facadeWalls'), fsets = [], faces = [];
+    const FW = new AG.GeometryBuilder('facadeWalls' + site.index), fsets = [], faces = [];
     const sx = sh.w / 2, sz = sh.d / 2, fy0 = sh.y0, FH = sh.y1 - sh.y0;
     const door = P.c;
     for (const n of NORMALS) {
@@ -71,40 +75,38 @@ AG.Living = (function () {
       fsets.push({ surf, branches, bounds: [0, 2 * ht, 0, FH] });      // (leaves stay on this face)
       faces.push({ O, t, n, w: 2 * ht, h: FH });
     }
-    const FV = new AG.GeometryBuilder('facadeVines');
+    const FV = new AG.GeometryBuilder('facadeVines' + site.index);
     // ribbons wide enough to read from the street, and a small luminous leaf every 4 steps
     AG.Vines.ribbons(FV, fsets, AG.Vines.maxS(fsets), 0.7, { leafEvery: 4, leafSize: 1.6, rand: () => p.random() });
 
-    // ---- ROOFTOP: a giant BloomFlower growing FROM the roof of this same building ----
-    // its base sits on the top shaft's real roof slab (city geometry: shaft.y1); it is sized to the
-    // roof (open radius ≈ 1.8 · scale ≈ the roof's mean half-width), so it reads as the tower's crown
-    const topSh = b.shafts[b.shafts.length - 1];
-    const roofY = topSh.y1 + 0.1;
-    const scale = 1.05 * (topSh.w + topSh.d) / 4 / 1.8;
-    const roof = AG.BloomFlower.create(p, { center: [b.cx, roofY, b.cz], scale });
+    // ---- ROOFTOP: a giant BloomFlower in this site's palette, growing FROM its own roof ----
+    const roof = AG.BloomFlower.create(p, { center: site.rooftop.center, scale: site.rooftop.scale, palette: site.cfg.flower });
 
     // ---- particles rising up the facade into the rooftop flower (p5.Vector) ----
     const rise = [];
     for (let i = 0; i < 64; i++) rise.push({ pos: p.createVector(0, -1e4, 0), vel: p.createVector(0, 0, 0), life: 0, seed: p.random(100), size: p.random(0.5, 1.3), hue: p.random() });
 
-    built = {
-      seed, faces, rise,
+    site.living = {
+      seed, faces, rise, C: colours(site.cfg),
       facade: { walls: FW.build(p), vines: FV.build(p), H: FH, grid: [6.0, 4.4], origin: door.slice(), reach: Math.hypot(sx, sz) * 2 + FH },
-      roof, roofY, roofScale: scale,
-      spr: new Float32Array(64 * 4), sprC: new Float32Array(64 * 4)
+      roof, roofY: site.rooftop.center[1], roofScale: site.rooftop.scale,
+      spr: new Float32Array(64 * 4), sprC: new Float32Array(64 * 4), pv: p.createVector(0, 0, 0), ph: p.createVector(0, 0, 0)
     };
-    L.built = built;
-    AG.U.emit('livingBuilt', { seed });
+    AG.U.emit('livingBuilt', { seed, site: site.id });
+  }
+
+  /* free one site's own meshes (its flower geometry and shaders are shared) */
+  function release(site) {
+    const B = site.living;
+    if (B && p.freeGeometry) { B.facade.walls.forEach((g) => p.freeGeometry(g)); B.facade.vines.forEach((g) => p.freeGeometry(g)); }
+    site.living = null;
   }
 
   /* ---------------- per frame ---------------- */
-  const tmpV = { v: null };
-  function update(dt) {
-    const R = AG.R2;
-    if (R.transform <= 0) { if (built) reset(); return; }
-    if (!built && AG.Garden.portal) build();
-    if (!built) return;
-    const S = R.stage, D = S.D, t = R.sinceBloom;
+  function updateSite(site, dt) {
+    if (site.transform <= 0) { if (site.living) release(site); return; }
+    if (!site.living) build(site);
+    const built = site.living, S = site.stage, D = S.D, t = site.sinceBloom;
     // THE ROOFTOP FLOWER: it EMERGES from the roof (grows from a seed of light: its scale, the same
     // p.scale origin as every flower) through the first part of stage D, then OPENS; the bloom value
     // eases through BloomFlower's own p.lerp
@@ -112,14 +114,16 @@ AG.Living = (function () {
     const emerge = p.constrain(p.map(D, 0, 0.45, 0, 1), 0, 1);
     rf.extScale = p.lerp(0.12, 1, 1 - Math.pow(1 - emerge, 3));
     rf.awake = D > 0.01; rf.target = p.constrain(p.map(D, 0.35, 1, 0, 1), 0, 1);
-    const camPos = AG.Garden.drawsScene() ? [rf.center[0], rf.center[1] + 50, rf.center[2] + 80] : AG.Camera.state.pos;
+    const inside = AG.Garden.drawsScene();
+    const camPos = inside ? [rf.center[0], rf.center[1] + 50, rf.center[2] + 80] : AG.Camera.state.pos;
     rf.update(dt, camPos);
-    // RISING PARTICLES: born on the facade (a random face, along its width, low down), they climb
-    // with a p.noise sway and, near the top, bend into the flower's heart (p5.Vector steering)
-    const rate = p.map(S.C + S.D, 0, 2, 0, 1) * (1 - 0.5 * S.E) + 0.3 * S.E;
+    // RISING PARTICLES: only where they can be seen
     built.spr.fill(0); built.sprC.fill(0);
-    const top = built.roofY, heart = rf.center;
-    if (!tmpV.v) { tmpV.v = p.createVector(0, 0, 0); tmpV.h = p.createVector(0, 0, 0); }
+    if (inside || p.dist(camPos[0], camPos[2], rf.center[0], rf.center[2]) > CFAR) return;
+    // born on the facade (a random face, along its width, low down), they climb with a p.noise
+    // sway (and each building's own p.cos / p.sin spiral) and, near the top, bend into the flower
+    const rate = p.map(S.C + S.D, 0, 2, 0, 1) * (1 - 0.5 * S.E) + 0.3 * S.E;
+    const top = built.roofY, heart = rf.center, C = built.C, M = site.cfg.motion;
     for (let i = 0; i < built.rise.length; i++) {
       const m = built.rise[i];
       if (m.life <= 0) {
@@ -130,9 +134,9 @@ AG.Living = (function () {
       }
       const sway = (p.noise(m.seed, t * 0.3) - 0.5) * 2;
       const nearTop = p.constrain(p.map(m.pos.y, top - 40, top + 4, 0, 1), 0, 1);
-      tmpV.h.set(heart[0], heart[1] + rf.scale * 0.6, heart[2]).sub(m.pos).setMag(9);
-      tmpV.v.set(sway, 7, 0).lerp(tmpV.h, nearTop);
-      m.vel.lerp(tmpV.v, 1 - Math.exp(-1.6 * dt));
+      built.ph.set(heart[0], heart[1] + rf.scale * 0.6, heart[2]).sub(m.pos).setMag(9);
+      built.pv.set(sway + p.cos(t * M.f + m.seed) * M.h, 7, p.sin(t * M.f + m.seed) * M.h).lerp(built.ph, nearTop);
+      m.vel.lerp(built.pv, 1 - Math.exp(-1.6 * dt));
       m.pos.x += m.vel.x * dt; m.pos.y += m.vel.y * dt; m.pos.z += m.vel.z * dt;
       if (m.pos.y > top + rf.scale * 0.9 || p.dist(m.pos.x, m.pos.z, heart[0], heart[2]) < 1.5 && m.pos.y > top) m.life = 0;
       const a = (0.5 + 0.5 * p.sin(t * 3 + m.seed)) * (m.life > 0 ? 1 : 0);
@@ -141,14 +145,20 @@ AG.Living = (function () {
       built.sprC.set([p.red(c) / 255, p.green(c) / 255, p.blue(c) / 255, a * 0.8], i * 4);
     }
   }
+  function update(dt) {
+    for (const s of AG.Gardens.sites) updateSite(s, dt);
+    const a = AG.Garden.site;
+    L.built = a ? a.living : null;
+  }
 
-  /* the shared colours and breathing (p.lerpColor, p.sin) */
-  function look() {
-    const R = AG.R2, S = R.stage, t = R.sinceBloom, T = R.transform;
+  /* one site's shared colours and breathing (p.lerpColor, p.sin); the active site by default */
+  function look(site) {
+    const s = site || AG.Garden.site;
+    const S = s.stage, t = s.sinceBloom, T = s.transform, C = s.living ? s.living.C : colours(s.cfg);
     const rgb = (c) => [p.red(c) / 255, p.green(c) / 255, p.blue(c) / 255];
     return {
       A: rgb(p.lerpColor(C.pink, C.lav, 0.5 * S.E)), B: rgb(p.lerpColor(C.cyan, C.pink, 0.4 * S.D)), C: rgb(p.lerpColor(C.lav, C.gold, 0.45 * S.E)),
-      // the windows change colour as the building wakes: cool cyan → pink → warm gold
+      // the windows change colour as the building wakes: cool → the site's main colour → its warm accent
       winA: rgb(p.lerpColor(p.lerpColor(C.cyan, C.pink, p.constrain(p.map(T, 0.25, 0.6, 0, 1), 0, 1)), C.gold, p.constrain(p.map(T, 0.6, 1, 0, 0.8), 0, 1))),
       winB: rgb(p.lerpColor(C.lav, C.pink, p.constrain(p.map(T, 0.3, 0.9, 0, 1), 0, 1))),
       breath: 1 + 0.12 * S.E * p.sin(t * 0.9)
@@ -156,42 +166,44 @@ AG.Living = (function () {
   }
 
   /* the vine program for one ribbon mesh, revealed up to `grow` */
-  function drawVines(geos, vw, grow, cols, lk) {
-    const R = AG.R2, sh = shaders();
+  function drawVines(site, geos, vw, grow, cols, lk) {
+    const sh = shaders();
     p.shader(sh.vine);
-    sh.vine.setUniform('uView', vw.V); sh.vine.setUniform('uProj', vw.P); sh.vine.setUniform('uCamPos', vw.eye); sh.vine.setUniform('uTime', R.sinceBloom);
-    sh.vine.setUniform('uGrow', grow); sh.vine.setUniform('uBreath', lk.breath); sh.vine.setUniform('uE', R.stage.E); sh.vine.setUniform('uFade', 1);
+    sh.vine.setUniform('uView', vw.V); sh.vine.setUniform('uProj', vw.P); sh.vine.setUniform('uCamPos', vw.eye); sh.vine.setUniform('uTime', site.sinceBloom);
+    sh.vine.setUniform('uGrow', grow); sh.vine.setUniform('uBreath', lk.breath); sh.vine.setUniform('uE', site.stage.E); sh.vine.setUniform('uFade', 1);
     sh.vine.setUniform('uColA', cols[0]); sh.vine.setUniform('uColB', cols[1]); sh.vine.setUniform('uColC', cols[2]);
     geos.forEach((g) => p.model(g));
   }
 
-  function drawSet(set, vw) {
-    const R = AG.R2, S = R.stage, sh = shaders(), lk = look();
+  function drawSet(site, vw) {
+    const set = site.living.facade, S = site.stage, sh = shaders(), lk = look(site);
     p.shader(sh.wall);
-    sh.wall.setUniform('uView', vw.V); sh.wall.setUniform('uProj', vw.P); sh.wall.setUniform('uCamPos', vw.eye); sh.wall.setUniform('uTime', R.sinceBloom);
+    sh.wall.setUniform('uView', vw.V); sh.wall.setUniform('uProj', vw.P); sh.wall.setUniform('uCamPos', vw.eye); sh.wall.setUniform('uTime', site.sinceBloom);
     sh.wall.setUniform('uStage', [S.A, S.B, S.C, S.D]); sh.wall.setUniform('uE', S.E); sh.wall.setUniform('uBreath', lk.breath);
-    sh.wall.setUniform('uWin', R.windows); sh.wall.setUniform('uReach', set.reach); sh.wall.setUniform('uHeight', set.H);
+    sh.wall.setUniform('uWin', site.windows); sh.wall.setUniform('uReach', set.reach); sh.wall.setUniform('uHeight', set.H);
     sh.wall.setUniform('uInterior', 0); sh.wall.setUniform('uOrigin', set.origin); sh.wall.setUniform('uGrid', set.grid); sh.wall.setUniform('uFade', 1);
     sh.wall.setUniform('uWinA', lk.winA); sh.wall.setUniform('uWinB', lk.winB);
+    const pc = site.cfg.portal; sh.wall.setUniform('uPalA', pc.a); sh.wall.setUniform('uPalB', pc.b); sh.wall.setUniform('uPalGold', pc.gold); sh.wall.setUniform('uPalCool', pc.cool);
     set.walls.forEach((g) => p.model(g));
     // STAGE C: the vines climbing the facade, with their leaves
-    if (S.C > 0.001) drawVines(set.vines, vw, S.C * 1.02, [lk.A, lk.B, lk.C], lk);
+    if (S.C > 0.001) drawVines(site, set.vines, vw, S.C * 1.02, [lk.A, lk.B, lk.C], lk);
   }
 
-  /* outside in the city: the facade, the rising particles and the rooftop flower (city renderer) */
+  /* outside in the city: every transformed site's facade, particles and rooftop flower */
   function drawCity(F) {
-    if (!built || AG.R2.transform <= 0) return;
-    const gl = p.drawingContext, vw = { V: F.view, P: F.proj, eye: F.cam.pos };
-    gl.enable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.ADD);
-    drawSet(built.facade, vw);
-    const sc = AG.Garden.scene;
-    if (sc && (AG.R2.stage.C > 0.001 || AG.R2.stage.D > 0.001)) sc.drawSprites(built.spr, built.sprC, vw, built.roof.t);
-    p.blendMode(p.BLEND);
-    if (AG.R2.stage.D > 0.001 && sc) sc.drawFlowerBody(built.roof, vw);
-    gl.enable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.BLEND);
+    const gl = p.drawingContext, vw = { V: F.view, P: F.proj, eye: F.cam.pos }, sc = AG.Garden.scene;
+    for (const s of AG.Gardens.sites) {
+      if (!s.living || s.transform <= 0) continue;
+      gl.enable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.ADD);
+      drawSet(s, vw);
+      if (sc && (s.stage.C > 0.001 || s.stage.D > 0.001)) sc.drawSprites(s.living.spr, s.living.sprC, vw, s.living.roof.t);
+      p.blendMode(p.BLEND);
+      if (s.stage.D > 0.001 && sc) sc.drawFlowerBody(s.living.roof, vw);
+      gl.enable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.BLEND);
+    }
   }
 
-  function reset() { built = null; L.built = null; }
+  function reset() { for (const s of AG.Gardens.sites) if (s.living) release(s); L.built = null; }
 
-  return Object.assign(L, { init, update, drawCity, reset, look, built: null });
+  return Object.assign(L, { init, update, drawCity, reset, release, look, built: null });
 })();

@@ -31,6 +31,7 @@ window.AG = window.AG || {};
 AG.R2Layer = {
   create(p) {
     const U = AG.U;
+    let colFor = null;
     const COL = {
       lav: p.color(176, 150, 255), pink: p.color(255, 128, 214), gold: p.color(255, 204, 120), cyan: p.color(130, 228, 255)
     };
@@ -159,6 +160,13 @@ AG.R2Layer = {
 
     function draw(scene) {
       const f = scene.flower, gl = p.drawingContext, t = f.t, b = f.bloom;
+      // the glyphs and rings in this building's own colours
+      const site = AG.Garden && AG.Garden.site;                       // (bloom.html has no city)
+      if (site && site !== colFor) {
+        colFor = site;
+        const c = site.cfg.interior, k = (v) => p.color(v[0], v[1], v[2]);
+        COL.pink = k(c.a); COL.lav = k(c.b); COL.cyan = k(c.c); COL.gold = k(c.gold);
+      }
       const h = scene.heartScreen();                               // (also sets the scene's matrices)
       p.push();
       p.resetShader(); p.resetMatrix();

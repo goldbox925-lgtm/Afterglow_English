@@ -69,7 +69,7 @@ AG.UI = (function () {
     const garden = !!AG.Garden && AG.Garden.phase === 'approach';
     const show = garden || (!!(FR && FR.ready) && st === 'AFTERGLOW' && body.classList.contains('entered') && !body.classList.contains('ended')
       && !AG.FSM.cinematic && !AG.Flight.finale && FR.collected < FR.list.length && !body.classList.contains('garden'));
-    const text = garden ? 'FLY THROUGH THE DOORWAY OF LIGHT' : 'COLLECT ALL FIVE FRAGMENTS';
+    const text = garden ? AG.Garden.goalText() : 'COLLECT ALL FIVE FRAGMENTS';
     if (g.textContent !== text) g.textContent = text;
     g.classList.toggle('show', show);
     if (!show) return;
@@ -210,6 +210,7 @@ AG.UI = (function () {
     if (F.cinematic) return { title: 'WATCH THE SCENE', text: "You'll be able to interact soon." };
     const def = C.states.find((s) => s.id === st);
     if (st === 'AFTERGLOW' && AG.Garden && AG.Garden.isActive()) {
+      if (AG.Gardens.allComplete()) return null;                       // free flight: nothing left to ask of her
       return AG.Garden.phase === 'approach' ? { title: 'THE MEMORY GARDEN', text: 'A doorway of light has opened. Fly through it · ← → steer · tap ↑ to rise · ↓ to descend.' } : null;
     }
     if (st === 'AFTERGLOW') {

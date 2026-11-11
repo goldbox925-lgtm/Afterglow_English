@@ -45,6 +45,9 @@ js/garden/r2Layer.js      AG.R2Layer: the p5-DRAWN light layer (beginShape / bez
                           screen space, after the composite                                   [phase 2]
 js/garden/r2Heroine.js    her movement in the garden: a p5.Vector arrive / seek steering
                           toward where the player points (mouseMoved / mousePressed)           [phase 3]
+js/garden/gardens.js      AG.Gardens: the five buildings. CONFIGS (palettes, plants, particle motion,
+                          rooftop size) and one site record per building (doorway, position, seed,
+                          saved flower, transformation, completion, rooftop)                  [phase 6]
 js/garden/botanical.js    AG.Botanical: the atrium's procedural plants (hanging wisteria, planters),
                           grown once into a cached opaque mesh.
 js/garden/vines.js        AG.Vines: procedural growth computed with p5 (noise-guided
@@ -359,6 +362,31 @@ flight controller, poses and character drawing.
 | **2 (done)** | One input path (p5 callbacks); hover on the heart (`mouseMoved` + `dist`) brightens the core; the p5 light layer (cue ring, awaken pulse, orbiting symbols, pollen halos) | Hover changes the core brightness (measured). Each layer element is visible in screenshots, and absent when its `p.*` call is disabled (ablation). Click / drag / release unchanged. The preview still works. |
 | **3 (done)** | The heroine in the garden; APPROACH by pointing (`mouseMoved` / `mousePressed` → arrive steering, `p5.Vector`); proximity → glow, petal response, motes drifting toward her | Her distance to the flower changes the glow (measured). She stops smoothly (no overshoot) at 10, 30 and 60 fps. Drag still works. |
 | **4 (done)** | TRANSFORM: at 100 %, `AG.Vines` (noise-guided `p5.Vector` walkers, seeded `p.random`, beziers, `lerpColor`, `millis`) grows light vines in the garden (p5 layer) and across the doorway building's facade (renderer pass); EXIT → EXPLORE shows the transformed building in the city | The growth starts only after 100 %, is deterministic per city, keeps 60 fps on the balanced tier, and persists when she flies around the building. Round 01 is unchanged. |
+| **6 (done)** | Five living buildings on one system: `AG.Gardens` configurations and site records; one flower scene whose state and palette are swapped per building; one atrium whose plants and city view are rebuilt per building; a facade and rooftop flower per completed building; the "City Bloom" counter; the finale | All five can be entered and use their own palette. The shared bloom works in each. Rooftop flowers stand on the right buildings. Finished states persist across switches. Round 01 and direct R02 still work. No added listeners or render loops. |
 
 Each phase ends with screenshots, an interaction test, a Round 01 check and an honest report of
 what was not verified.
+
+**Phase 6 notes (as built): five living buildings.**
+
+*One system.* `AG.Gardens.CONFIGS` holds what differs: Rose, Azure, Violet, Solar and Aurora each
+have a flower palette, an interior palette, facade and portal colours, plant parameters, particle
+motion and a rooftop size. `AG.Gardens.sites` holds one record per building in the current city.
+
+*What is shared and what is per building.* There is one p5 instance, one `p.draw`, one flower
+scene (`G.scene`), one atrium room, one set of shaders and one set of flower meshes.
+- Going through a doorway, `AG.Garden` saves the previous site's flower (`snapshot`), loads this
+  one (`restore`, `setPalette`), and asks the atrium to `activate(site)`.
+- `activate` frees the previous plants and city view, then rebuilds them with
+  `p.randomSeed(site.seed)` and the site's parameters. Only one building's details are in memory.
+- A facade and rooftop flower are built only when that building has bloomed.
+- `AG.R2` advances every bloomed site's transformation, including while she is in another building.
+
+*Choosing the buildings.* `garden.js chooseAll()` takes the doorways nearest downtown that stand
+well apart. All five prefer roofs with a helipad or lattice crown, so that no mast or spire passes
+through the flower; other roofs are used only if a city has too few. The city generator now
+records `crownKind` on each building; this draws no random numbers, so the city is unchanged.
+
+*Progress.* "City Bloom — n / 5" counts bloomed buildings and is visible only in Round 02. When
+all five are complete, `finaleLook()` moves the sky glow through the five palettes with
+`p.lerpColor`. Free flight continues.

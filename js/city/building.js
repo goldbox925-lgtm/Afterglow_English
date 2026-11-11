@@ -112,6 +112,6 @@ AG.Building = class Building {
     const hw = (this.w + 1.6) / 2, hd = (this.d + 1.6) / 2;
     return { x0: this.x - hw, x1: this.x + hw, z0: this.z - hd, z1: this.z + hd,
       top: Math.max(this.h * (this.damaged ? 0.92 : 1), this.top) + 6,
-      cx: this.x, cz: this.z, shaft: this.shaft || null, shafts: this.shafts || null, damaged: this.damaged, building: true };
+      cx: this.x, cz: this.z, shaft: this.shaft || null, shafts: this.shafts || null, damaged: this.damaged, building: true, crownKind: this.crownKind || null };
   }
 };
