@@ -175,7 +175,7 @@ AG.Garden = (function () {
       G.white = U.smooth(0, ENTER_T * 0.9, G.t);
       if (G.t >= ENTER_T) {
         G.phase = 'inside'; G.t = 0; G.white = 1; G.visits++;
-        if (!G.scene) G.scene = AG.GardenScene.create(p);
+        if (!G.scene) G.scene = AG.GardenScene.create(p, { scale: 2.6 });
         showInside(true);
         enterGardenFlight();
         AG.U.emit('gardenPhase', { phase: G.phase });
@@ -208,9 +208,13 @@ AG.Garden = (function () {
   /* the garden scene replaces the city image while inside (or fading out of it) */
   function drawsScene() { return G.phase === 'inside' || G.phase === 'leave'; }
   function draw(dt, CH) {
-    // the garden, with her in it (the city renderer's character drawing) and, once the building
-    // transforms, the atrium's living walls behind the flower (js/garden/living.js)
-    G.scene.draw(dt, { CH, atrium: AG.Living ? AG.Living.drawGarden : null });
+    // the garden, with her in it (the city renderer's character drawing), inside the glass atrium
+    // (js/garden/atrium.js), whose light follows the same data streams (her position, closeness,
+    // the flower's glow). (Phase 4's interior walls stand aside for the atrium: the transformation's
+    // inside effects move into it in Part B; the city facade and rooftop are unchanged.)
+    const f0 = G.scene.flower, streams = { t: f0.t, her: AG.Flight.garden ? AG.Flight.pos : null, prox: G.prox || 0, core: f0.core, bloom: f0.bloom };
+    if (G.atrium) G.atrium.update(dt, streams);
+    G.scene.draw(dt, { CH, env: G.atrium, streams });
     if (!G.layer) G.layer = AG.R2Layer.create(p);
     G.layer.draw(G.scene);                    // the p5-drawn light layer, on top (js/garden/r2Layer.js)
     const f = G.scene.flower, R = AG.R2;
@@ -226,14 +230,27 @@ AG.Garden = (function () {
 
   /* her entrance into the garden: the same flight state, now in the garden mode. She glides in
      from the left of the view and settles front-left of the flower, where the camera sees both. */
+  /* the atrium, built once per city: centred on the doorway's building, its floor at the doorway's
+     floor, the city's own axes (so the real city stands round it outside the glass) */
+  function buildAtrium() {
+    const P = G.portal, b = P.box, sc = G.scene;
+    sc.camera();
+    const camAz = Math.atan2(sc.view.eye[2], sc.view.eye[0]);
+    const origin = [b.cx, P.c[1] - P.h / 2 + 1, b.cz];
+    G.atrium = AG.Atrium.create(p, { origin, skipBox: b, camAz, seed: Math.floor(Math.abs(b.cx * 31.7 + b.cz * 11.3)) % 9973 + 3 });
+    G.atrium.build(info);
+    G.atriumFor = P;
+  }
+
   function enterGardenFlight() {
     const sc = G.scene, c = sc.flower.center;
+    if (!G.atrium || G.atriumFor !== G.portal) buildAtrium();
     sc.camera();
     const camAz = Math.atan2(sc.view.eye[2] - c[2], sc.view.eye[0] - c[0]);
-    const az0 = camAz + 1.8, r = 7.5;
+    const az0 = camAz + 1.8, r = 9.5, k = sc.flower.scale / 2;   // (the hover ring scales with the flower)
     const start = [c[0] + Math.cos(az0) * r, c[1] + 3.3, c[2] + Math.sin(az0) * r];
     const inward = [-Math.cos(az0) * 2.4, -0.2, -Math.sin(az0) * 2.4];
-    AG.Flight.enterGarden({ center: c.slice(), start, v0: inward, az: camAz + 0.8 });
+    AG.Flight.enterGarden({ center: c.slice(), start, v0: inward, az: camAz + 0.8, ring: 3.8 * k, keepOut: 2.7 * k, h: 2.4 * k });
     G.pendingAwaken = false;
   }
 
@@ -275,7 +292,7 @@ AG.Garden = (function () {
     AG.U.on('replay', reset);
   }
   /* a new city: forget the old doorway */
-  function setWorld(i) { reset(); G.portal = null; info = i; }
+  function setWorld(i) { reset(); G.portal = null; G.atrium = null; G.atriumFor = null; info = i; }
   function resize() { if (G.scene) G.scene.resize(); }
 
   return Object.assign(G, {

@@ -21,12 +21,14 @@
 window.AG = window.AG || {};
 
 AG.GardenScene = {
-  create(p) {
+  create(p, o) {
     const U = AG.U;
     const SH = {}; let gl, quad, petalGeo, domeGeo, sprGeo, stamGeo, discGeo, sceneFB, bA, bB, ready = false;
-    const cam = { yaw: 0.55, pitch: 0.3, dist: 12.5, target: [0, 1.9, 0], fov: 40 };
+    // the default view shows the room round the flower (wider, lower, a little further back)
+    const cam = { yaw: 0.55, pitch: 0.15, dist: 18, target: [0, 3.6, 0], fov: 52 };
     const view = { eye: [0, 0, 0], V: null, P: null };
-    const flower = AG.BloomFlower.create(p, { center: [0, 0, 0], scale: 2 });
+    // (the game's garden flower is larger, 2.6, so it holds the atrium; the preview keeps 2)
+    const flower = AG.BloomFlower.create(p, { center: [0, 0, 0], scale: (o && o.scale) || 2 });
     let mode = null, lastX = 0, lastY = 0;            // mode: 'flower' | 'orbit' | null
 
     function mesh(name, fill) { const B = new AG.GeometryBuilder(name); fill(B); return B.build(p)[0]; }   // each mesh fits one chunk
@@ -139,8 +141,8 @@ AG.GardenScene = {
       lastX = x; lastY = y;
     }
     function up() { if (mode === 'flower') flower.pointerUp(); mode = null; }
-    function wheel(d) { cam.dist = p.constrain(cam.dist * Math.exp(d * 0.001), 6, 22); }   // (≤ 22 m: inside the atrium's walls)
-    function resetView() { cam.yaw = 0.55; cam.pitch = 0.3; cam.dist = 12.5; mode = null; }
+    function wheel(d) { cam.dist = p.constrain(cam.dist * Math.exp(d * 0.001), 6, 20); }   // (≤ 20 m: inside the atrium's glass, r = 24 m)
+    function resetView() { cam.yaw = 0.55; cam.pitch = 0.15; cam.dist = 18; mode = null; }
 
     /* the flower's own origin in p5's transform stack (shared by the receptacle and the petals):
        reset → its base → p.scale (growth / click swell / breathing / 100 % pulse, js/garden/flower.js
@@ -245,17 +247,42 @@ AG.GardenScene = {
       // Round 02 · Phase 4: the atrium's living walls behind the flower, once the transformation runs
       if (o && o.atrium) o.atrium({ V: view.V, P: view.P, eye: view.eye }, flower.center);
       gl.enable(gl.DEPTH_TEST);
+      // THE ATRIUM (js/garden/atrium.js): the city outside, the room mirrored in the polished floor,
+      // the floor, metal and stone, then the glass (all behind or round the flower; the flower last)
+      const env = o && o.env, st = o && o.streams, vw = { V: view.V, P: view.P, eye: view.eye };
+      if (env && env.built) {
+        gl.depthMask(true); p.blendMode(p.BLEND);
+        env.drawCity(vw, t);
+        // the reflection: the same room seen through the floor's mirror (y = −1)
+        const M = [1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, -2, 0, 1];
+        const vm = { V: U.mat4.mul(view.V, M), P: view.P, eye: [view.eye[0], -2 - view.eye[1], view.eye[2]] };
+        env.drawSolid(vm, t, st);
+        p.blendMode(p.ADD); gl.depthMask(false); env.drawPlants(vm, t, st);
+        drawFlowerBody(flower, vm);
+        gl.enable(gl.DEPTH_TEST); gl.depthMask(true); p.blendMode(p.BLEND);
+        env.drawFloor(vw, t, st);                       // translucent polish over the reflection
+        env.drawSolid(vw, t, st);
+        gl.depthMask(false); env.drawGlass(vw, t, st);
+      }
       const common = (sh) => { sh.setUniform('uView', view.V); sh.setUniform('uProj', view.P); sh.setUniform('uCamPos', view.eye); sh.setUniform('uTime', t); sh.setUniform('uCenter', flower.center); sh.setUniform('uScale', flower.scale); };
       // ground light rings + click pulse
       p.blendMode(p.ADD); gl.depthMask(false);
       p.shader(SH.spr); common(SH.spr);
-      SH.spr.setUniform('uKind', 2); SH.spr.setUniform('uDisc', 2.6); SH.spr.setUniform('uBloom', flower.bloom); SH.spr.setUniform('uAwake', flower.awakeK);
+      SH.spr.setUniform('uKind', 2); SH.spr.setUniform('uDisc', 2.25); SH.spr.setUniform('uBloom', flower.bloom); SH.spr.setUniform('uAwake', flower.awakeK);
       SH.spr.setUniform('uPulseR', flower.pulseR); SH.spr.setUniform('uPulseA', flower.pulseA); SH.spr.setUniform('uRingCol', col.ring);
       p.model(discGeo);
+      if (env && env.built) { p.blendMode(p.ADD); gl.depthMask(false); env.drawPlants(vw, t, st); }
       drawFlowerBody(flower, { V: view.V, P: view.P, eye: view.eye }, {
         beforePetals: () => { if (herBehind) { drawHer(o); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); } },
         afterPetals: () => { if (herPos && !herBehind) { drawHer(o); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); } }
       });
+      // the atrium's pollen: the flower's glow-sprite program, with the atrium's 48 motes
+      if (env && env.built) {
+        p.blendMode(p.ADD); gl.depthMask(false);
+        p.shader(SH.spr); common(SH.spr);
+        SH.spr.setUniform('uKind', 0); SH.spr.setUniform('uSpr', env.spr); SH.spr.setUniform('uSprC', env.sprC);
+        p.model(sprGeo);
+      }
       gl.depthMask(true); p.blendMode(p.BLEND);
       sceneFB.end();
 

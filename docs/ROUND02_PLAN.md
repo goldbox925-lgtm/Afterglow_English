@@ -115,6 +115,70 @@ polling.
 
 ## 7. Phases and test criteria
 
+**Environment upgrade, Part A (as built): the glass atrium** (`js/garden/atrium.js`,
+`js/shaders/atrium.glsl.js`).
+
+*Geometry.* Real 3D meshes, built once with `AG.GeometryBuilder` (about 76 k vertices in 5
+meshes, `p.randomSeed` for repeatable variation):
+- **Glass hall:** 24 m radius, 36 facets × 7 bands up to 28 m, then a ribbed glass dome to 44 m
+  with an oculus.
+- **Metal:** mullions, ring beams, 12 dome ribs and dome rings.
+- **Integrated light strips:** on every second mullion, as a floor cove light, and on the
+  walkway rails.
+- **Stepped pearl platform:** 3 steps under the flower, with gold edge strips.
+- **Two curved walkways:** at 9 m and 17 m, with rails and under-edge light.
+- **8 planters:** crystal leaves and blossom spikes.
+- **88 hanging vines with wisteria clusters:** from the walkways and the dome rim (paths shaped
+  with `p.noise`, lengths from `p.random`).
+- **The city beyond the glass:** the REAL Round 01 buildings round the doorway tower (1,165 of
+  them, from the city's own collision boxes), in the city's own axes. The garden's origin is the
+  doorway building's centre at the doorway's floor. Towers closer than 60 m are left out so the
+  glass is not walled in. The city floor far below shows its street lights.
+
+*Materials and light (WebGL2 / GLSL):*
+- **Metal and stone:** hemisphere ambient, a key light from the dome, the flower's warm point
+  light, soft Blinn highlights and a fresnel rim, plus depth haze.
+- **Glass:** fresnel alpha, thin-film colour, vertical reflection streaks and bright pane edges.
+- **Floor reflection:** the frames, plants and flower are rendered a second time through a
+  mirrored view matrix (about y = −1). The polished floor is drawn translucent over that
+  reflection, more reflective at grazing angles. No real-time ray tracing.
+- **Floor inlays:** light rings and spokes, and a golden pool round the platform.
+- **City:** window grids, roof trims, aerial haze and a glow rising from below.
+- **Plants:** additive light, swaying in the vertex shader.
+
+*Responding to her* (the existing streams: her position, `prox`, the flower's core):
+
+| Effect | Far → near (measured) |
+|---|---|
+| Light-strip colour, `p.lerpColor` | violet-blue (0.53, 0.55, 1.0) → pink-gold (1.0, 0.6, 0.65) |
+| Floor inlays | lavender → gold |
+| Golden pool radius, `p.map` → `p.lerp` | 6.6 → 11.3 m |
+| Pollen speed | 0.37 → 0.67 m/s |
+
+- The pollen also drifts toward her (`p5.Vector`, no per-frame allocation).
+- The plants lean away and brighten within about 10 m of her (vertex shader).
+- The core's warm light on the stone follows the flower's glow.
+
+*p5 drawing:* 14 petals drift down (`p5.Vector` + `p.noise` breeze), drawn as bezier outlines,
+turning (`p.rotate`) and tumbling (`p.scale` on one axis).
+
+*Scale and camera:*
+- The game's flower is now 2.6 (2 in the preview), and her hover ring, keep-out sphere and
+  height scale with it.
+- Default camera: fov 52°, 18 m, a low pitch that shows the room; zoom up to 20 m (inside the
+  glass).
+
+*Performance:* about 5.3 ms CPU per garden frame (forced redraws, everything on). All meshes are
+static; per frame only uniforms and 48 + 14 small objects update.
+
+*Limitations:*
+- The atrium (24 m radius) is larger than the tower's real footprint (22 × 49 m): the interior is
+  enlarged so the garden, the camera and the heroine fit.
+- The platform's top is evenly lit, without reflections of its own.
+- The dome is mostly above the default view.
+- The transformation's interior effects (Phase 4's flat interior walls and their leaves) stand
+  aside for the atrium; Part B moves them into it. The facade and rooftop parts are unchanged.
+
 **Phase 4 notes (as built): the building's transformation.**
 
 *Data streams.* All are in `AG.R2` (`js/garden/round2.js`), the single authority; everything

@@ -87,7 +87,7 @@ AG.R2Layer = {
       }
       // (STAGE A's golden light paths on the floor are a WebGL ribbon mesh: js/garden/living.js)
       // STAGE C: luminous leaves unfurling along the vines on the atrium walls, as the growth passes
-      if (S.C > 0.001) {
+      if (S.C > 0.001 && !(AG.Garden && AG.Garden.atrium)) {          // (the old interior walls' leaves; Part B re-homes them)
         const front = S.C * 1.02;
         for (let i = 0; i < LV.atrium.leaves.length; i++) {
           const n = LV.atrium.leaves[i];
@@ -132,6 +132,31 @@ AG.R2Layer = {
       }
     }
 
+    /* the atrium's drifting petals (positions: AG.Atrium, p5.Vector): small bezier petals, each
+       turning (p.rotate) and tumbling (p.scale on one axis: seen edge-on as it spins) */
+    function atriumPetals(scene) {
+      const A = AG.Garden && AG.Garden.atrium;
+      if (!A || !A.built || scene !== AG.Garden.scene) return;
+      const t = scene.flower.t;
+      for (const pt of A.petals) {
+        const s = scene.project([pt.pos.x, pt.pos.y, pt.pos.z]), s2 = scene.project([pt.pos.x, pt.pos.y + pt.size, pt.pos.z]);
+        const px = p.dist(s[0], s[1], s2[0], s2[1]);
+        if (px < 1.5 || s[0] < -30 || s[0] > p.width + 30 || s[1] < -30 || s[1] > p.height + 30) continue;
+        const col = p.lerpColor(COL.pink, COL.lav, pt.hue);
+        p.push();
+        p.translate(s[0], s[1]);
+        p.rotate(t * pt.spin + pt.seed);
+        p.scale(px, px * (0.35 + 0.65 * Math.abs(p.sin(t * 1.3 + pt.seed))));
+        p.noFill(); p.stroke(alpha(col, 0.55)); p.strokeWeight(1);
+        p.beginShape();
+        p.vertex(0, -1);
+        p.bezierVertex(0.6, -0.4, 0.4, 0.6, 0, 1);
+        p.bezierVertex(-0.4, 0.6, -0.6, -0.4, 0, -1);
+        p.endShape(p.CLOSE);
+        p.pop();
+      }
+    }
+
     function draw(scene) {
       const f = scene.flower, gl = p.drawingContext, t = f.t, b = f.bloom;
       const h = scene.heartScreen();                               // (also sets the scene's matrices)
@@ -141,6 +166,7 @@ AG.R2Layer = {
       p.blendMode(p.ADD);
       p.translate(-p.width / 2, -p.height / 2);                    // screen pixels, origin top-left
       p.bezierDetail(6);
+      atriumPetals(scene);
       transformation(scene, h);
 
       // ---- HOVER CUE ----
