@@ -103,6 +103,20 @@
       perf.warm = 0;
     };
 
+    /* Round 02's input: p5's own mouse callbacks (p5 also routes touches here) forward to the
+       Memory Garden while it is on screen. Round 01 keeps AG.Input (unchanged); these callbacks
+       do nothing outside the garden, so there is one input path per round and no duplicates. */
+    const onCanvas = (e) => !e || !e.target || e.target === p.canvas;
+    p.mousePressed = function (e) {
+      if (!AG.Garden.wantsPointer() || !onCanvas(e)) return;      // (buttons in the garden UI stay clickable)
+      AG.Garden.pointerDown(p.mouseX, p.mouseY);
+      return false;
+    };
+    p.mouseDragged = function () { if (AG.Garden.wantsPointer()) { AG.Garden.pointerMove(p.mouseX, p.mouseY); return false; } };
+    p.mouseReleased = function () { AG.Garden.pointerUp(); };
+    p.mouseMoved = function () { AG.Garden.hover(p.mouseX, p.mouseY); };
+    p.mouseWheel = function (e) { if (AG.Garden.wantsPointer()) { AG.Garden.wheel(e.delta); return false; } };
+
     p.draw = function () {
       const dt = Math.min(p.deltaTime / 1000, 0.1) || 0.016;
       rt += dt;
@@ -147,6 +161,7 @@
         white = U.smooth(1.05, 0.55, q) * 0.3 * S.cloudGlow;      // a thin veil: she stays visible inside the cloud
       }
       AG.Renderer.white = U.damp(AG.Renderer.white || 0, white, 4, dt);
+      AG.R2.update(dt);                       // Round 02's shared state and phase (js/garden/round2.js)
       // Round 02: inside the doorway the Memory Garden replaces the city image
       if (AG.Garden.drawsScene()) AG.Garden.draw(playing ? dt : 0);
       else AG.Renderer.render(S, cam, F.animTime, rt, CH, F.animTime);
@@ -157,7 +172,7 @@
         progress: +R.progress.toFixed(3), districts: R.districts, lit: R.buildingsLit, litBuildings, mood: +S.mood.toFixed(3), rain: +S.rain.toFixed(2), damage: +S.damage.toFixed(2),
         stabilised: IA.stabilised, connections: IA.connections, nodes: IA.nodes.length, hint: IA.hintLevel,
         split: cam.split, pose: CH ? CH.items.map((i) => i.id).join('>') : '', flight: cam.flight,
-        alt: AG.Flight.ready ? Math.round(AG.Flight.pos[1]) : 0, asc: +AG.Flight.asc.toFixed(3), finale: AG.Flight.finale };
+        alt: AG.Flight.ready ? Math.round(AG.Flight.pos[1]) : 0, asc: +AG.Flight.asc.toFixed(3), finale: AG.Flight.finale, r2: AG.R2.phase };
     };
 
     function adapt(dt) {
@@ -177,7 +192,21 @@
     const handlers = {
       toggle() { if (!entered) return; AG.FSM.toggle(); },
       replay() { if (!entered) return; AG.Camera.snapNext(); AG.FSM.replay(); },
-      jump(id) { if (!entered) return; AG.FSM.jumpTo(id); AG.Camera.snapNext(); },
+      jump(id) { if (!entered) return; AG.Garden.reset(); AG.FSM.jumpTo(id); AG.Camera.snapNext(); },
+      /* testing / presentation: straight to the start of Round 02 (the flight to the doorway).
+         Round 01's stages complete with default choices, as the other jumps do; the lift-off
+         cinematic and the end card are skipped. The story path (end card → Enter the Memory
+         Garden) is unchanged. */
+      jumpR2() {
+        if (!entered) return;
+        AG.Garden.reset(); AG.R2.reset();
+        AG.FSM.jumpTo('AFTERGLOW');
+        AG.FSM.cinematic = null;
+        if (!AG.FSM.playing) AG.FSM.play();
+        AG.Garden.start();
+        AG.UI.showCard(C.states[C.states.length - 1], true);   // the stage label only, no "05" title card
+        AG.Camera.snapNext();
+      },
       reactivity() { AG.Reactivity.setEnabled(!AG.Reactivity.enabled); },
       regen() {
         if (generating) return;
@@ -242,6 +271,7 @@
         else if (k === '?' || k === '/') AG.UI.toggleHelp();
         else if (k === 'Escape') AG.UI.toggleHelp(false);
         else if (k >= '1' && k <= '5') handlers.jump(C.states.at(Number(k) - 1).id);
+        else if (k === '6') handlers.jumpR2();                         // R02 — Memory Garden
         else if (k === 'q' || k === 'Q') {
           const opts = ['auto', 'low', 'balanced', 'high'];
           const nq = opts[(opts.indexOf(qualityMode) + 1) % opts.length];

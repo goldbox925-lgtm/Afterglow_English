@@ -343,3 +343,5 @@ body.entered:not(.flying) #stage canvas { cursor: crosshair; }
   #gardenButtons { left: 16px; right: 16px; bottom: 130px; justify-content: center; }
   #gardenMeter { bottom: 84px; }
 }
+.chip.r2 { margin-left: 6px; border-style: dashed; }
+.chip.r2.active { border-style: solid; color: #fff; border-color: var(--magenta); box-shadow: 0 0 10px rgba(255, 42, 158, 0.35); }

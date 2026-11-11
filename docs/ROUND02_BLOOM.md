@@ -5,6 +5,21 @@ finale (see *In the game* below). The development preview `bloom.html` shows the
 
 ## In the game
 
+**Testing shortcut:** the **R02** chip (after the five stage chips) or key **6** starts Round 02
+directly at the doorway. Round 01's stages complete with default choices, as with the other
+jumps; the lift-off cinematic and the end card are skipped.
+
+**Input and the light layer:** inside the garden, input arrives through p5's own mouse
+callbacks in `js/sketch.js`.
+- Hovering over the golden centre brightens it and shows a turning cue ring.
+- Clicking it awake sends a pulse ring outward.
+- As it opens, p5-drawn petal symbols orbit it and pollen halos pulse around the anthers
+  (`js/garden/r2Layer.js`). The preview shows the same layer.
+
+**Phase:** `AG.R2` (`js/garden/round2.js`) is Round 02's shared state. It derives the phase
+ENTER → APPROACH → AWAKEN → DRAG → BLOOM → TRANSFORM → EXIT → EXPLORE, shown in the HUD as
+"R02 · PHASE". The plan for the next phases is `docs/ROUND02_PLAN.md`.
+
 Round 01 is unchanged and ends as before: fifth fragment → glide → ascent → end card.
 
 | Step | What happens |

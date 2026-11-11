@@ -49,6 +49,7 @@ AG.BloomFlower = (function () {
       center: o.center.slice(), scale: sc,
       bloom: 0, target: 0, awake: false, awakeK: 0, pulseT: 99, dragging: false,
       grow: 0.94, growPulseT: 99, fullPulseT: 99, full: false, idleYaw: 0,   // p.scale() / p.rotate() inputs (gardenScene.js)
+      hover: false, hoverK: 0,                                               // the pointer over the golden centre (p.mouseMoved)
       petals: [], stamA: new Float32Array(STAMENS * 4), stamB: new Float32Array(STAMENS * 4),
       spr: new Float32Array(MAX_SPR * 4), sprC: new Float32Array(MAX_SPR * 4), sprN: 0,
       motes: [], colors: {}, t: 0, n: 0, clicks: 0
@@ -93,7 +94,7 @@ AG.BloomFlower = (function () {
 
     function reset() {
       F.bloom = 0; F.target = 0; F.awake = false; F.awakeK = 0; F.pulseT = 99; F.dragging = false; F.motes.length = 0; F.clicks = 0;
-      F.growPulseT = 99; F.fullPulseT = 99; F.full = false;
+      F.growPulseT = 99; F.fullPulseT = 99; F.full = false; F.hover = false; F.hoverK = 0;
     }
 
     /* the heart of the flower for picking: tall inside the closed bud, low and wide when open */
@@ -195,7 +196,9 @@ AG.BloomFlower = (function () {
       };
       // core intensity: faint inside the bud, glowing when awake, radiant at full bloom, + click pulse
       const pulse = Math.exp(-F.pulseT * 3.0);
-      F.core = 0.08 + 0.3 * F.awakeK + 1.15 * Math.pow(b, 1.4) + 0.9 * pulse * (0.4 + 0.6 * F.awakeK);
+      // HOVER: the golden centre brightens while the pointer is over it (eased, p.lerp)
+      F.hoverK = p.lerp(F.hoverK, F.hover && !F.dragging ? 1 : 0, 1 - Math.exp(-8 * dt));
+      F.core = 0.08 + 0.3 * F.awakeK + 1.15 * Math.pow(b, 1.4) + 0.9 * pulse * (0.4 + 0.6 * F.awakeK) + 0.45 * F.hoverK;
       F.vein = 0.18 + 0.35 * F.awakeK + 0.9 * b;
       // emissive glow and iridescence strength: already alive in the bud, fuller as it opens
       F.emit = p.map(b, 0, 1, 0.55 + 0.25 * F.awakeK, 1.15) + 0.3 * pulse;

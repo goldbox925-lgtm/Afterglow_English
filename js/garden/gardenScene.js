@@ -115,6 +115,20 @@ AG.GardenScene = {
       mode = flower.pointerDown(ro, rd, [x, y], cs, radiusPx) ? 'flower' : 'orbit';
       return mode === 'flower';
     }
+    /* the heart on screen: its centre and the radius of its pick sphere, in pixels */
+    function heartScreen() {
+      camera();
+      const H = flower.heart(), cs = project(H.c);
+      const edge = project([H.c[0] + Math.cos(cam.yaw) * H.r, H.c[1], H.c[2] - Math.sin(cam.yaw) * H.r]);
+      return { x: cs[0], y: cs[1], r: p.dist(cs[0], cs[1], edge[0], edge[1]) };
+    }
+    /* HOVER (p.mouseMoved): is the pointer over the golden centre? p.dist on screen against the
+       heart's own pick radius; the flower eases its hover glow toward it */
+    function hover(x, y) {
+      const h = heartScreen();
+      flower.hover = mode !== 'orbit' && p.dist(x, y, h.x, h.y) <= h.r;
+      return flower.hover;
+    }
     function move(x, y) {
       if (mode === 'flower') flower.pointerDrag([x, y]);           // camera orbit suspended
       else if (mode === 'orbit') {
@@ -223,7 +237,7 @@ AG.GardenScene = {
       gl.enable(gl.DEPTH_TEST);
     }
 
-    return { flower, cam, view, init, resize, draw, down, move, up, wheel, resetView, camera, project,
+    return { flower, cam, view, init, resize, draw, down, move, up, wheel, hover, heartScreen, resetView, camera, project,
       get dragging() { return mode === 'flower'; } };
   }
 };

@@ -122,6 +122,12 @@ AG.UI = (function () {
       b.addEventListener('click', () => handlers.jump(st.id));
       chips.appendChild(b);
     });
+    // Round 02 — Memory Garden: straight to its start (testing / presentation; key 6)
+    const r2 = document.createElement('button');
+    r2.className = 'chip r2'; r2.id = 'chipR2'; r2.textContent = 'R02';
+    r2.title = 'R02 — Memory Garden: start Round 02 at the doorway of light (presentation jump, key 6)';
+    r2.addEventListener('click', () => handlers.jumpR2());
+    chips.appendChild(r2);
     // feedback where the viewer clicks
     U.on('tap', (e) => {
       const r = document.createElement('span');
@@ -177,7 +183,7 @@ AG.UI = (function () {
     if (!st) return;
     $('chapterLabel').textContent = st.num + ' · ' + st.title;
     const idx = AG.stateIndex(st.id);
-    document.querySelectorAll('#chapters .chip').forEach((b, i) => { b.classList.toggle('active', i === idx); b.classList.toggle('done', i < idx); });
+    document.querySelectorAll('#chapters .chip:not(.r2)').forEach((b, i) => { b.classList.toggle('active', i === idx); b.classList.toggle('done', i < idx); });
     if (labelOnly) { card.classList.remove('show'); return; }
     $('cardNum').textContent = st.num;
     $('cardTitle').textContent = st.title;
@@ -230,7 +236,9 @@ AG.UI = (function () {
     let prog = st === 'AFTERGLOW' ? 0.8 + 0.2 * AG.Flight.asc : Math.min(0.8, idx * 0.1 + 0.5 * U.clamp(AG.Interactions.progress / NC.toAfterglow, 0, 1));
     $('progress').style.width = (prog * 100).toFixed(1) + '%';
     const def = C.states[idx];
-    $('timeText').textContent = AG.Garden && AG.Garden.isActive() ? 'MEMORY GARDEN' : st === 'AFTERGLOW' && AG.Flight.arc ? AG.Flight.phase : AG.Flight.finale ? 'LIGHT' : def.title;
+    const r2on = !!AG.R2 && AG.R2.phase !== 'OFF';
+    $('chipR2').classList.toggle('active', r2on);
+    $('timeText').textContent = r2on ? 'R02 · ' + AG.R2.phase : st === 'AFTERGLOW' && AG.Flight.arc ? AG.Flight.phase : AG.Flight.finale ? 'LIGHT' : def.title;
     if (S.hint !== lastHint) { lastHint = S.hint; $('hint').textContent = S.hint; $('hint').classList.toggle('show', !!S.hint); }
     document.body.classList.toggle('flying', st === 'AFTERGLOW');
     document.body.classList.toggle('cinematic', !!F.cinematic);

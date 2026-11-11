@@ -24,7 +24,11 @@ NUMBNESS ─► FRACTURE ─► AWAKENING ─► RECLAIMING_SELF ─► AFTERGLO
 - **Replay** (R, ↺ button, Play again): resets restoration, interactions, flight, character,
   camera and story, then starts 01 with its cutscene.
 - **Jump** (keys 1–5, presentation only): earlier stages complete with default choices.
-  Jumping backwards resets first, then completes up to the target.
+  Jumping backwards resets first, then completes up to the target. A jump also closes Round 02
+  if it is running.
+- **R02** (the chip after 05, or key 6; presentation / testing): straight to the start of
+  Round 02, the flight to the doorway (`handlers.jumpR2`, `js/sketch.js`). Earlier stages
+  complete with default choices; the lift-off cinematic and the end card are skipped.
 
 ## `need`: what each stage requires in this city
 

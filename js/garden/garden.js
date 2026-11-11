@@ -19,7 +19,10 @@
    ENTER     Through the doorway: she glides on into the light while the
              screen fades to white (1.1 s).
    INSIDE    The Memory Garden: AG.GardenScene (the Interactive Bloom)
-             replaces the city image. Click the heart, drag outward to
+             replaces the city image, with the p5-drawn light layer
+             (AG.R2Layer) on top. Input arrives through p5's own mouse
+             callbacks in js/sketch.js (pointerDown / pointerMove /
+             pointerUp / hover / wheel below). Click the heart, drag outward to
              unfold; drag elsewhere to look around; wheel to zoom.
              "Back to the city" fades out and puts her just outside the
              doorway, facing away; the flower keeps its state, so flying
@@ -42,7 +45,7 @@ AG.Garden = (function () {
   const START = 170;                   // metres in front of the doorway where she starts
   const ENTER_T = 1.1, FADE_IN = 1.4, LEAVE_T = 0.7;
   const G = { phase: 'off', portal: null, white: 0, open: 0, near: 0, scene: null, visits: 0, t: 0 };
-  let p = null, canvas = null, ptrId = null, info = null;
+  let p = null, info = null;
   const $ = (id) => document.getElementById(id);
 
   /* ---------- the doorway's building ---------- */
@@ -118,7 +121,8 @@ AG.Garden = (function () {
   function reset() {
     closePortal();
     setFlightAssist(false);
-    G.phase = 'off'; G.white = 0; G.open = 0; G.near = 0; G.t = 0; ptrId = null;
+    G.phase = 'off'; G.white = 0; G.open = 0; G.near = 0; G.t = 0; G.visits = 0;
+    if (p && p.canvas) p.canvas.style.cursor = '';
     if (G.scene) { G.scene.flower.reset(); G.scene.resetView(); }
     document.body.classList.remove('garden', 'garden-inside');
     showInside(false);
@@ -192,6 +196,8 @@ AG.Garden = (function () {
   function drawsScene() { return G.phase === 'inside' || G.phase === 'leave'; }
   function draw(dt) {
     G.scene.draw(dt);
+    if (!G.layer) G.layer = AG.R2Layer.create(p);
+    G.layer.draw(G.scene);                    // the p5-drawn light layer, on top (js/garden/r2Layer.js)
     const f = G.scene.flower;
     const pct = Math.round(f.bloom * 100);
     if ($('gardenPct').textContent !== pct + '%') $('gardenPct').textContent = pct + '%';
@@ -209,25 +215,22 @@ AG.Garden = (function () {
   /* for the UI's edge arrow */
   function target() { return G.phase === 'approach' && G.portal ? G.portal.c : null; }
 
-  /* ---------- input inside (the game canvas' own pointer events) ---------- */
-  function bindInput(cv) {
-    canvas = cv;
-    const xy = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-    const live = () => G.phase === 'inside' && G.scene && AG.FSM.playing;
-    canvas.addEventListener('pointerdown', (e) => {
-      if (!live() || ptrId !== null) return;
-      ptrId = e.pointerId; try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
-      G.scene.down(...xy(e));
-    });
-    canvas.addEventListener('pointermove', (e) => { if (live() && e.pointerId === ptrId) G.scene.move(...xy(e)); });
-    const end = (e) => { if (e.pointerId !== ptrId) return; ptrId = null; if (G.scene) G.scene.up(); };
-    canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
-    canvas.addEventListener('wheel', (e) => { if (!live()) return; e.preventDefault(); G.scene.wheel(e.deltaY); }, { passive: false });
+  /* ---------- input inside: called from the ONE input path, p5's own mouse callbacks in
+     js/sketch.js (p.mousePressed / mouseDragged / mouseReleased / mouseMoved / mouseWheel, which
+     p5 also fires for touch). No listeners of its own. ---------- */
+  function wantsPointer() { return G.phase === 'inside' && !!G.scene && AG.FSM.playing; }
+  function pointerDown(x, y) { if (!wantsPointer()) return false; G.scene.hover(x, y); return G.scene.down(x, y) || true; }
+  function pointerMove(x, y) { if (wantsPointer()) G.scene.move(x, y); }
+  function pointerUp() { if (G.scene) G.scene.up(); }
+  function hover(x, y) {
+    if (!wantsPointer()) return;
+    const on = G.scene.hover(x, y);
+    if (p && p.canvas) p.canvas.style.cursor = on ? 'pointer' : '';
   }
+  function wheel(d) { if (wantsPointer()) G.scene.wheel(d); }
 
   function init(p5inst) {
     p = p5inst;
-    bindInput(p.canvas);
     $('endGarden').addEventListener('click', start);
     $('gardenBack').addEventListener('click', leave);
     $('gardenReset').addEventListener('click', () => { if (G.scene) G.scene.flower.reset(); });
@@ -240,6 +243,7 @@ AG.Garden = (function () {
 
   return Object.assign(G, {
     init, setWorld, resize, start, reset, leave, update, draw, drawsScene, portalDraw, target, choose,
+    wantsPointer, pointerDown, pointerMove, pointerUp, hover, wheel,
     isActive: () => G.phase !== 'off'
   });
 })();

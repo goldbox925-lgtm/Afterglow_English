@@ -22,7 +22,7 @@
 window.AG = window.AG || {};
 
 new p5((p) => {
-  let scene = null;
+  let scene = null, layer = null;
   const $ = (id) => document.getElementById(id);
 
   p.setup = function () {
@@ -32,6 +32,7 @@ new p5((p) => {
     p.pixelDensity(Math.min(window.devicePixelRatio || 1, 1.5));
     scene = AG.GardenScene.create(p);
     scene.init();
+    layer = AG.R2Layer.create(p);                     // the p5-drawn light layer (js/garden/r2Layer.js)
     // test bench / console
     window.__flower = scene.flower; window.__bloomCam = scene.cam; window.__bloomProject = (w) => { scene.camera(); return scene.project(w); };
     $('btnReset').addEventListener('click', () => scene.flower.reset());
@@ -45,6 +46,7 @@ new p5((p) => {
   p.mousePressed = function (e) { if (!onCanvas(e) || !scene) return; scene.down(p.mouseX, p.mouseY); return false; };
   p.mouseDragged = function () { if (scene) scene.move(p.mouseX, p.mouseY); return false; };
   p.mouseReleased = function () { if (scene) scene.up(); };
+  p.mouseMoved = function () { if (scene) p.canvas.style.cursor = scene.hover(p.mouseX, p.mouseY) ? 'pointer' : ''; };
   p.mouseWheel = function (e) { if (scene) scene.wheel(e.delta); return false; };
   p.keyPressed = function () { if (p.key === 'r' || p.key === 'R') scene.flower.reset(); };
 
@@ -53,6 +55,7 @@ new p5((p) => {
     if (!scene) return;
     const dt = Math.min(p.deltaTime / 1000, 0.1) || 0.016;
     scene.draw(dt);
+    layer.draw(scene);
     // the temporary progress indicator
     const f = scene.flower;
     $('bloomPct').textContent = Math.round(f.bloom * 100) + '%';
