@@ -355,10 +355,12 @@ AG.Renderer = (function () {
     }
     // breathing: vertical only, anchored at the ground; never a stretch of limbs
     const sy = 1 + (item.breath || 0) * scale;
-    const H = subjH * sy, W = subjW;
+    // item.k: a size multiplier (only the Memory Garden passes one; Round 01 never does), about her centre
+    const k = item.k || 1;
+    const H = subjH * sy * k, W = subjW * k;
     const margin = 0.22;
     let center = item.anchorPos.slice();
-    if (meta.anchor === 'bottom') center = V.add(center, V.scale(up, H / 2));
+    if (meta.anchor === 'bottom') center = V.add(center, V.scale(up, subjH * sy / 2));
     center = V.add(center, [0, item.bob || 0, 0]);
     if (item.shake) center = V.add(center, [(Math.random() - 0.5) * item.shake, (Math.random() - 0.5) * item.shake * 0.5, 0]);
     const bw = P.bbox.u1 - P.bbox.u0, bh = P.bbox.v1 - P.bbox.v0;
@@ -513,18 +515,23 @@ AG.Renderer = (function () {
   /* Round 02: the doorway of light on its building and the beacon above it (js/garden/garden.js;
      nothing is drawn in Round 01). Additive; the doorway is depth-tested, the beacon is not. */
   function drawPortal(F) {
-    const P = AG.Garden && AG.Garden.portalDraw();
-    if (!P || !AG.SHADERS.portal) return;
+    const list = AG.Garden && AG.Garden.portalDraw();
+    if (!list || !AG.SHADERS.portal) return;
     if (!SH.portal) SH.portal = makeShader(AG.SHADERS.portal);
     const sh = SH.portal;
     p.blendMode(p.ADD); gl.depthMask(false); p.shader(sh); common(sh, F);
-    sh.setUniform('uOpen', P.open); sh.setUniform('uNear', P.near); sh.setUniform('uN', P.n);
-    gl.enable(gl.DEPTH_TEST);
-    sh.setUniform('uKind', 0); sh.setUniform('uC', P.c); sh.setUniform('uSize', [P.w / 2, P.h / 2]);
-    p.model(quad);
-    gl.disable(gl.DEPTH_TEST);
-    sh.setUniform('uKind', 1); sh.setUniform('uC', P.beacon); sh.setUniform('uSize', [9, 320]);
-    p.model(quad);
+    for (const P of list) {                                       // one per building (js/garden/gardens.js)
+      sh.setUniform('uPalA', P.col.a); sh.setUniform('uPalB', P.col.b); sh.setUniform('uPalGold', P.col.gold); sh.setUniform('uPalCool', P.col.cool);
+      sh.setUniform('uOpen', P.open); sh.setUniform('uNear', P.near); sh.setUniform('uN', P.n);
+      gl.enable(gl.DEPTH_TEST);
+      sh.setUniform('uKind', 0); sh.setUniform('uC', P.c); sh.setUniform('uSize', [P.w / 2, P.h / 2]);
+      p.model(quad);
+      if (P.beaconK > 0.002) {
+        gl.disable(gl.DEPTH_TEST);
+        sh.setUniform('uOpen', P.beaconK); sh.setUniform('uKind', 1); sh.setUniform('uC', P.beacon); sh.setUniform('uSize', [P.beaconW, P.beaconH]);
+        p.model(quad);
+      }
+    }
     gl.enable(gl.DEPTH_TEST);
   }
 
@@ -540,6 +547,9 @@ AG.Renderer = (function () {
     const aspect = p.width / p.height;
     const F = { t, at: at !== undefined ? at : t, cam, hero: [hero.fig.x, hero.fig.y, hero.fig.z] };
     F.spots = AG.Restoration.uniforms(F.at);
+    // Round 02: the finished buildings' colours in the city's sky glow, a share each (nothing before the first)
+    const FN = AG.Gardens && AG.Gardens.awakeningLook(F.at);
+    if (FN) S = Object.assign({}, S, { cityGlow: S.cityGlow.map((v, i) => v + FN.col[i] * FN.k * 0.32), horizon: S.horizon.map((v, i) => v + FN.col[i] * FN.k * 0.1) });
     if (CH && CH.flash > 0.02) S = Object.assign({}, S, { exposure: S.exposure + CH.flash * 0.6 });
     // near-field lights: fallen sign, door, the city's returning warmth, lightning
     const sA = S.heroA * 1.7, sB = S.heroB * 1.6;
@@ -583,6 +593,7 @@ AG.Renderer = (function () {
     drawSmoke(F, S);
     drawNetwork(F, S);
     drawPortal(F);
+    if (AG.Living) AG.Living.drawCity(F);     // Round 02: the doorway building's transformation (facade, rooftop flower)
     additive();
     if (!cam.split) {
       drawNeon(F, S, world.heroNeon);
@@ -661,7 +672,7 @@ AG.Renderer = (function () {
       fogDensity: 0, fogFalloff: 0.002, fogLow: [0, 0, 0], fogHigh: [0, 0, 0] };
     const F = { t, at: t, view: cam.V, proj: cam.P, cam };
     // her aura sprite at a third: against the garden's plain backdrop its square edge would show
-    const items = CH.items.map((it) => Object.assign({}, it, { aura: (it.aura || 0) * 0.33 }));
+    const items = CH.items.map((it) => Object.assign({}, it, { aura: (it.aura || 0) * 0.33, k: (light && light.k) || 1 }));
     gl.depthMask(false);
     drawCharacter(F, S, cam, Object.assign({}, CH, { items }));
     p.blendMode(p.BLEND);

@@ -209,6 +209,7 @@ AG.CityGenerator = (function () {
       const kind = R.next();
       if (kind < 0.35) {
         // mechanical penthouse + antenna
+        b.crownKind = 'penthouse';
         setData(GB, MAT.CONCRETE);
         const pw = w * R.range(0.45, 0.7), pd = d * R.range(0.45, 0.7), ph = R.range(4, 9);
         GB.box(x, top, z, pw, ph, pd);
@@ -222,6 +223,7 @@ AG.CityGenerator = (function () {
         }
       } else if (kind < 0.55 && b.h > 90) {
         // stepped spire
+        b.crownKind = 'spire';
         let r = Math.min(w, d) * 0.32, y = top;
         setData(GB, MAT.GLASS);
         for (let i = 0; i < 4; i++) {
@@ -234,6 +236,7 @@ AG.CityGenerator = (function () {
         if (lod >= 1) { neonData(NB, R.next(), R.next(), NEON.STRIP, curDist); outlineRect(NB, x, top + 0.4, z, w * 0.92, d * 0.92, R.next(), R.next()); }
       } else if (kind < 0.72) {
         // helipad ring
+        b.crownKind = 'helipad';
         setData(GB, MAT.CONCRETE);
         const r = Math.min(w, d) * 0.42;
         GB.prism(x, top, z, r, 1.2, 8, Math.PI / 8);
@@ -246,6 +249,7 @@ AG.CityGenerator = (function () {
         }
       } else {
         // lattice crown frame + tanks
+        b.crownKind = 'lattice';
         setData(GB, MAT.METAL);
         const ch = R.range(6, 16);
         for (const sx of [-1, 1]) for (const sz of [-1, 1]) GB.box(x + sx * w * 0.42, top, z + sz * d * 0.42, 0.6, ch, 0.6);

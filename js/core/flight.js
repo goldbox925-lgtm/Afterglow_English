@@ -81,6 +81,7 @@ AG.Flight = (function () {
     F.boosting = false; F.lifts = 0; F.doubleTaps = 0; F.finaleT = 0; F.gliding = false; F.finales = 0;
     F.noFragments = false; F.assistTurn = 0; F.assistVy = 0; F.avoidOff = false; F.assistHold = false;   // Round 02 (js/garden/garden.js)
     F.garden = null; F.gardenArrived = false;                                                              // Round 02: inside the Memory Garden
+    F.keysFirst = false; F.mouseParked = null; sinceVert = 99; sinceSteer = 99;                            // Round 02: the player's input before any assist
     resetMotion();
     if (AG.Fragments) AG.Fragments.reset();          // every flight starts with all five fragments in place
   }
@@ -96,7 +97,7 @@ AG.Flight = (function () {
 
   /* key / touch input → F.keys. Taps of ↑ are detected HERE, at the press/release events
      (wall time), so even a tap shorter than one frame is never lost; update() applies them. */
-  let upDownAt = 0, pendingLift = 0, lastTapAt = -1e9, liftLeft = 0, steerHeld = 0, upHeldT = 0;
+  let upDownAt = 0, pendingLift = 0, lastTapAt = -1e9, liftLeft = 0, steerHeld = 0, upHeldT = 0, sinceVert = 99, sinceSteer = 99;
   function press(k, on) {
     const was = !!F.keys[k];
     F.keys[k] = !!on;
@@ -156,6 +157,13 @@ AG.Flight = (function () {
     let mx = (input && input.mx) || 0;
     mx = Math.abs(mx) < FC.deadZone ? 0 : (mx - Math.sign(mx) * FC.deadZone) / (1 - FC.deadZone);
     const steer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+    // Round 02: a pointer left resting on a button (Back to the city, R02) does not steer her until
+    // it moves, and a held arrow key wins over the mouse. (Both off in Round 01: unchanged there.)
+    if (F.mouseParked) {
+      const I = AG.Input;
+      if (Math.hypot((I.px || 0) - F.mouseParked[0], (I.py || 0) - F.mouseParked[1]) > 24) F.mouseParked = null; else mx = 0;
+    }
+    if (F.keysFirst && steer) mx = 0;
     steerHeld = steer ? steerHeld + dt : 0;
     const tighten = 1 + FC.turnTighten * U.smooth(0.4, 1.4, steerHeld);
     F.turnTight = tighten;
@@ -224,16 +232,23 @@ AG.Flight = (function () {
      integrated in fixed sub-steps of ≤ 1/120 s, so the path is the same at 10, 30 or 60 fps.
      The flower's keep-out sphere: inside it, pos is pushed back out to its surface and the
      velocity's inward part removed (p5.Vector dot / sub), so she never passes through the petals.
-     KEYS (the existing ← → ↑ ↓ handlers): ← → move her round the flower (the ring azimuth), ↑ ↓
-     raise / lower the hover height. The MOUSE does not steer her here: in the garden it belongs
-     to the flower (click / drag) and the camera (drag elsewhere, wheel).
+     KEYS (the same ← → ↑ ↓ handlers and tap detection as the city, at the room's scale):
+       ← →        she flies round the flower, fast (g.orbitSpeed m/s), facing where she goes; ← always
+                  carries her to the LEFT of the view, → to the right (the ring direction is chosen
+                  from the camera's right vector, g.camRight); a held arrow tightens as in the city
+       ↑ tap      a lift of tapLift × ROOM metres, eased; ↑ ↑ double-tap: + doubleLift × ROOM
+       ↑ hold     a steady rise; ↓ hold: a steady descent (and cancels a lift still pending)
+     The MOUSE does not steer her here: in the garden it belongs to the flower (click / drag) and
+     the camera (drag elsewhere, wheel).
      ARRIVED (the interaction mode): close to the target and slow (hysteresis), she levitates
      facing the flower (CharacterDirector: flying pose → levitating pose, cross-faded).
      --------------------------------------------------------------------------------------------- */
-  let gTarget = null, gTmp = null, gC = null;
+  let gTarget = null, gTmp = null, gC = null, gLift = 0;
+  const ROOM = 0.1;                 // the city's lifts (13 m tap, +32 m double) at the garden's scale
   function enterGarden(g) {
-    // g: { center, start, ring, h, keepOut, cruise, slowR, maxForce }
-    F.garden = Object.assign({ ring: 3.8, h: 2.4, keepOut: 2.7, cruise: 3.2, slowR: 4.0, respond: 5, maxForce: 9 }, g);
+    // g: { center, start, ring, h, keepOut, cruise, slowR, maxForce, orbitSpeed, hMax }
+    F.garden = Object.assign({ ring: 3.8, h: 2.4, keepOut: 2.7, cruise: 3.2, slowR: 4.0, respond: 5, maxForce: 9, orbitSpeed: 8.5, fastMaxForce: 26, hMax: 8.5, climb: 2.6, camRight: null }, g);
+    F.garden.speedNow = F.garden.cruise; F.garden.vh = 0; gLift = 0; steerHeld = 0; upHeldT = 0;
     if (!gTarget) { gTarget = p.createVector(0, 0, 0); gTmp = p.createVector(0, 0, 0); gC = p.createVector(0, 0, 0); }
     const G = F.garden, c = G.center;
     F.pos = G.start.slice();
@@ -245,23 +260,192 @@ AG.Flight = (function () {
     trail = []; for (let i = 0; i < 24; i++) trail.push(F.pos.slice());
   }
   function exitGarden() { F.garden = null; F.gardenArrived = false; }
+  /* her velocity as it is (metres / s): the hand-over from the garden to the city keeps it */
+  function setVel(v) { if (vel) vel.set(v[0], v[1], v[2]); F.vel = v.slice(); F.flySpeed = Math.hypot(v[0], v[2]); }
+  /* metres of rise still to come (a city tap given at the end of the flight out is kept) */
+  function carryLift(m) { if (m > 0) liftLeft += m; }
+  /* Round 02 (garden mode only): a short upward impulse of h metres over dur seconds */
+  function gardenImpulse(h, dur) { if (F.garden && !F.garden.launch) F.garden.impulse = { t: 0, h, dur }; }
+  /* Round 02 (garden and flight out): her heading turned toward wantYaw by a critically damped spring,
+     sub-stepped (n steps of h), its turn rate capped (YAW_W) and its angular acceleration capped
+     (YAW_A), so a turn starts, runs and settles smoothly at any frame rate. The spring's own pull is
+     limited to the speed it can still brake from (√(2·a·|error|)), so the cap never makes it overshoot. */
+  const YAW_OM = 6.5, YAW_W = 2.6, YAW_A = 11;
+  function yawSpring(G, wantYaw, n, h) {
+    for (let s = 0; s < n; s++) {
+      const dy = Math.atan2(Math.sin(wantYaw - F.yaw), Math.cos(wantYaw - F.yaw)), v = G.yawVel || 0;
+      const vCap = Math.min(YAW_W, Math.sqrt(2 * YAW_A * 0.85 * Math.abs(dy)));
+      let acc = YAW_OM * YAW_OM * dy - 2 * YAW_OM * v;
+      if (Math.abs(v) > vCap && v * dy > 0) acc = -Math.sign(v) * YAW_A;   // too fast to stop in time: brake
+      G.yawVel = U.clamp(v + U.clamp(acc, -YAW_A, YAW_A) * h, -YAW_W, YAW_W);
+      F.yaw += G.yawVel * h;
+    }
+    F.yawRate = G.yawVel;
+    // the visual bank: 8–15° into a turn (0.26 rad at most), eased back to level as the turn ends
+    F.bank = U.damp(F.bank, U.clamp(-F.yawRate * 0.16, -0.26, 0.26), 3, n * h);
+  }
+
+  /* ROUND 02 · THE FLIGHT OUT (after a building's transformation, js/garden/garden.js). Still the
+     garden mode (same state, same p5.Vector velocity, same sub-steps and keep-out sphere), with a
+     different target: a line through the open glass panel L.n, then on out along it.
+       ASSIST   the target point pulls her through the opening (seek, force-limited); round the
+                flower first when it is in the way (a tangent waypoint)
+       SPEED    from her garden speed up to the city's cruise with the city's acceleration:
+                p.lerp(speed, cruise, 1 − e^(−accel·dt)), so she reaches the city at its speed
+       ← →      shift her line across the opening, true to the view (g.camRight), held = tighter
+       ↑        the city's taps / double-taps raise her line (× L.liftScale, inside the opening);
+                past the glass a tap is kept for the city flight (carryLift); hold ↑ / ↓ climbs /
+                descends
+     She faces where she flies (yaw eased toward her velocity). */
+  function launchUpdate(dt) {
+    const G = F.garden, L = G.launch, k = F.keys, FC = AG.CONFIG.flight, c = G.center;
+    F.gardenArrived = false;
+    const steer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+    steerHeld = steer ? steerHeld + dt : 0;
+    const tighten = 1 + FC.turnTighten * U.smooth(0.4, 1.4, steerHeld);
+    const t = [-L.n[2], 0, L.n[0]], cr = G.camRight, side = cr ? Math.sign(t[0] * cr[0] + t[2] * cr[2]) || 1 : 1;
+    L.off = U.clamp(L.off + steer * side * L.lateral * tighten * dt, -L.halfW, L.halfW);
+    const rNow = Math.hypot(F.pos[0] - c[0], F.pos[2] - c[2]), pastGlass = rNow > L.R;
+    if (pendingLift > 0 && !pastGlass) { L.lift += pendingLift * L.liftScale; pendingLift = 0; F.lifts = (F.lifts || 0) + 1; }
+    liftLeft = 0;
+    upHeldT = k.up ? upHeldT + dt : 0;
+    if (k.up && upHeldT >= FC.tapMax) L.lift += L.climb * dt;
+    if (k.down) L.lift -= L.climb * dt;
+    L.lift = U.clamp(L.lift, L.yLo - L.y, L.yHi - L.y);
+    F.steering = steer !== 0; F.boosting = false;
+    G.speedNow = p.lerp(G.speedNow, FC.cruise, 1 - Math.exp(-FC.accel * dt));
+    const aimY = c[1] + L.y + L.lift;
+    const at = (r) => [c[0] + L.n[0] * r + t[0] * L.off, aimY, c[2] + L.n[2] * r + t[2] * L.off];
+    gC.set(c[0], c[1] + 1.0, c[2]);
+    pos.set(F.pos[0], F.pos[1], F.pos[2]);
+    const n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
+    for (let s = 0; s < n; s++) {
+      const r = Math.hypot(pos.x - c[0], pos.z - c[2]);
+      const a = at(r < L.R - 0.5 ? L.R : L.Rout + 30);
+      // the flower in the way (she is behind it, or the line passes close): a tangent point first
+      const qx = pos.x - c[0], qz = pos.z - c[2], along = qx * L.n[0] + qz * L.n[2], across = qx * t[0] + qz * t[2];
+      if (along < G.keepOut + 0.5 && Math.abs(across) < G.keepOut + 1.6) {
+        const sd = across >= 0 ? 1 : -1, R0 = G.keepOut + 2.2;
+        a[0] = c[0] + t[0] * sd * R0 + L.n[0] * Math.max(along + 2, 0); a[2] = c[2] + t[2] * sd * R0 + L.n[2] * Math.max(along + 2, 0);
+      }
+      gTarget.set(a[0], a[1], a[2]);
+      const desired = p5.Vector.sub(gTarget, pos).setMag(G.speedNow);
+      const force = p5.Vector.sub(desired, vel).mult(6).limit(70);
+      vel.add(force.mult(h)).limit(G.speedNow);
+      pos.add(p5.Vector.mult(vel, h));
+      gTmp.set(pos).sub(gC);
+      if (gTmp.mag() < G.keepOut) {
+        gTmp.setMag(G.keepOut); pos.set(gC).add(gTmp);
+        const nrm = gTmp.copy().normalize(), vn = vel.dot(nrm);
+        if (vn < 0) vel.sub(nrm.mult(vn));
+      }
+      if (pos.y < c[1] + 0.5) { pos.y = c[1] + 0.5; if (vel.y < 0) vel.y = 0; }
+    }
+    F.pos = [pos.x, pos.y, pos.z]; F.vel = [vel.x, vel.y, vel.z];
+    L.r = Math.hypot(pos.x - c[0], pos.z - c[2]); L.aimY = aimY;
+    const hs = Math.hypot(vel.x, vel.z);
+    // she faces where she flies: the same capped spring as round the flower (no speed threshold)
+    if (hs > 1e-3) yawSpring(G, Math.atan2(vel.x, -vel.z), n, h);
+    else { F.yawRate = G.yawVel = U.damp(G.yawVel || 0, 0, 4, dt); F.bank = U.damp(F.bank, 0, 3, dt); }
+    F.speed = hs; F.flySpeed = hs; F.vy = vel.y;
+    F.upright = U.damp(F.upright, 0, 2, dt);
+    trailClock -= dt;
+    if (trailClock <= 0) { trail.unshift(F.pos.slice()); trail.length = 24; trailClock = 0.05; }
+  }
+
+  /* ROUND 02 · THE ARRIVAL CIRCUIT (garden mode only). Once she has arrived and her Flight pose is
+     held, the ring point carries her once round the flower (2π), slowly, so the flower is seen from
+     every side, then she settles into her hover. It is not a second controller: it only moves the
+     same ring point (G.az) the arrows move, and widens the ring (G.ringNow) so her body stays clear
+     of the open petals; the same p5.Vector arrive steering flies her after it.
+       pace     angular speed W = 2π / TOUR_RUN (≈ 13 s at full pace), eased in (U.damp, a project
+                helper) and braked to a stop on the last stretch (√(2·a·remaining)), so the whole
+                circuit takes about 15 s; computed from dt, never per frame
+       ← →      the player wins: while an arrow is held the circuit pauses (its gain eases to 0), and
+                resumes smoothly 0.6 s after release; what she flew by hand never counts as circuit
+       radius   the ring widens to TOUR_WIDE × ring during the circuit and eases back after it
+     G.tour = { state: 'wait' | 'run' | 'done', ang, w, gain, dAz (this frame's guided step), dir } */
+  const TOUR_RUN = 13, TOUR_WAIT = 3.8, TOUR_WIDE = 1.3;
+  function gardenTour(dt, steer) {
+    const G = F.garden;
+    if (!G.tour) G.tour = { state: 'wait', ang: 0, w: 0, gain: 0, dAz: 0, dir: 1, rest: 0, clock: 0, arrivedT: 0 };
+    const T = G.tour; T.dAz = 0; T.v = 0; T.clock += dt;
+    if (G.ringNow === undefined) G.ringNow = G.ring;
+    if (T.state === 'wait') {
+      T.arrivedT = F.gardenArrived ? T.arrivedT + dt : 0;
+      // after the arrival breath and the Flight transition (≈ 3.6 s from the entry), once she is there
+      if (T.clock >= TOUR_WAIT && T.arrivedT >= 0.6) T.state = 'run';
+    }
+    if (T.state === 'run') {
+      const W = 2 * Math.PI / TOUR_RUN, a = W / 2.2, rem = 2 * Math.PI - T.ang;
+      T.rest = steer ? 0 : T.rest + dt;
+      T.gain = U.damp(T.gain, steer || T.rest < 0.6 ? 0 : 1, steer ? 4 : 1.2, dt);
+      T.w = Math.min(U.damp(T.w, W * T.gain, 1.1, dt), Math.sqrt(2 * a * Math.max(0, rem)));
+      T.dAz = Math.min(T.w * dt, rem) * T.dir;
+      T.ang += Math.abs(T.dAz);
+      G.az += T.dAz;
+      T.v = T.w * G.ringNow;
+      if (T.ang >= 2 * Math.PI - 1e-4) { T.state = 'done'; T.w = 0; }
+    }
+    // the ring: wider from the start of the circuit until it is done, eased (p.lerp, frame-rate independent)
+    const wide = T.state === 'run' ? TOUR_WIDE : 1;
+    G.ringNow = p.lerp(G.ringNow, G.ring * wide, 1 - Math.exp(-0.9 * dt));
+    return T;
+  }
 
   function gardenUpdate(dt, input) {
-    const G = F.garden, k = F.keys;
-    pendingLift = 0; liftLeft = 0;                                 // (↑ taps / holds mean "higher" here)
-    G.az += ((k.right ? 1 : 0) - (k.left ? 1 : 0)) * 0.85 * dt;
-    G.h = p.constrain(G.h + ((k.up ? 1 : 0) - (k.down ? 1 : 0)) * 1.4 * dt, 0.9, 4.6);
+    if (F.garden.launch) { launchUpdate(dt); return; }   // the flight out (below)
+    const G = F.garden, k = F.keys, FC = AG.CONFIG.flight;
+    // ← →: round the flower, true to the screen. The ring's direction of increasing azimuth is
+    // (−sin az, 0, cos az); its sign against the camera's right vector says which way is "right".
+    const steer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+    steerHeld = steer ? steerHeld + dt : 0;
+    // a held arrow speeds the orbit up a little (the city's +55 % would ask for more turning force than
+    // the steering has on this small ring: she would drift out and swing back, i.e. jerk)
+    const tighten = 1 + 0.15 * U.smooth(0.4, 1.4, steerHeld);
+    const cr = G.camRight, side = cr ? Math.sign(-Math.sin(G.az) * cr[0] + Math.cos(G.az) * cr[2]) || 1 : 1;
+    // the ring point moves with an angular velocity that is eased in and out (frame-rate independent),
+    // so a press or a release never makes the target jump: smooth acceleration and deceleration
+    const wantW = steer * side * (G.orbitSpeed / G.ring) * tighten;
+    G.azVel = U.damp(G.azVel || 0, wantW, steer ? 3.0 : 2.2, dt);
+    G.az += G.azVel * dt;
+    const T = gardenTour(dt, steer);
+    // ↑ / ↓: the city's taps and double-taps (detected in press()) as eased lifts, a hold as a climb
+    if (pendingLift > 0) { gLift += pendingLift * ROOM; pendingLift = 0; F.lifts = (F.lifts || 0) + 1; }
+    liftLeft = 0;
+    upHeldT = k.up ? upHeldT + dt : 0;
+    if (k.down) gLift = 0;
+    const climbing = k.up && upHeldT >= FC.tapMax;
+    const wantVh = k.down ? -G.climb : climbing ? G.climb : gLift > 0.02 ? Math.min(G.climb * 1.3, 0.6 + gLift * 1.6) : 0;
+    G.vh = U.damp(G.vh, wantVh, 4, dt);
+    G.h = p.constrain(G.h + G.vh * dt, 0.9, G.hMax);
+    if (G.vh > 0) gLift = Math.max(0, gLift - G.vh * dt);
+    if (G.h >= G.hMax) gLift = 0;
+    F.steering = steer !== 0; F.boosting = false;
+    // speed: fast while she is being flown, back to the slow settling cruise when released, eased
+    // with the city's acceleration constant (1 − e^(−accel·dt))
+    const flown = steer !== 0 || Math.abs(G.azVel) > 0.15 || Math.abs(G.vh) > 0.3;
+    // (the guided circuit's own pace: its ring point moves at T.v m/s, so her speed limit allows twice
+    // that, which keeps her close behind it instead of lagging metres back)
+    const wantSpeed = flown ? G.orbitSpeed * tighten * 1.15 : Math.max(G.cruise, 2 * T.v);
+    G.speedNow = p.lerp(G.speedNow, wantSpeed, 1 - Math.exp(-FC.accel * 2 * dt));
+    const maxForce = p.map(G.speedNow, G.cruise, G.orbitSpeed, G.maxForce, G.fastMaxForce, true);
     gC.set(G.center[0], G.center[1] + 1.0, G.center[2]);
-    gTarget.set(G.center[0] + Math.cos(G.az) * G.ring, G.center[1] + G.h, G.center[2] + Math.sin(G.az) * G.ring);
+    // a magical impulse (the 3D heroine's flower reaction): the target rises and settles back as a
+    // smooth bump, so the same arrive steering carries her up and down again
+    let bump = 0;
+    if (G.impulse) { const I = G.impulse; I.t += dt; bump = I.t < I.dur ? I.h * Math.pow(Math.sin(Math.PI * I.t / I.dur), 2) : 0; if (I.t >= I.dur) G.impulse = null; }
+    // the ring point (p.cos / p.sin of its azimuth), on the ring as it is now (wider during the circuit)
+    gTarget.set(G.center[0] + p.cos(G.az) * G.ringNow, G.center[1] + G.h + bump, G.center[2] + p.sin(G.az) * G.ringNow);
     pos.set(F.pos[0], F.pos[1], F.pos[2]);
     const n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
     for (let s = 0; s < n; s++) {
       // ARRIVE: desired velocity toward the target, slowing inside slowR (p.map), steering force limited
       const desired = p5.Vector.sub(gTarget, pos);
       const d = desired.mag();
-      desired.setMag(d < G.slowR ? p.map(d, 0, G.slowR, 0, G.cruise) : G.cruise);
-      const steer = p5.Vector.sub(desired, vel).mult(G.respond).limit(G.maxForce);
-      vel.add(steer.mult(h)).limit(G.cruise);
+      desired.setMag(d < G.slowR ? p.map(d, 0, G.slowR, 0, G.speedNow) : G.speedNow);
+      const force = p5.Vector.sub(desired, vel).mult(G.respond).limit(maxForce);
+      vel.add(force.mult(h)).limit(G.speedNow);
       pos.add(p5.Vector.mult(vel, h));
       // the flower's keep-out sphere: back to its surface, inward velocity removed
       gTmp.set(pos).sub(gC);
@@ -274,15 +458,16 @@ AG.Flight = (function () {
       if (pos.y < G.center[1] + 0.5) { pos.y = G.center[1] + 0.5; if (vel.y < 0) vel.y = 0; }
     }
     F.pos = [pos.x, pos.y, pos.z]; F.vel = [vel.x, vel.y, vel.z];
-    // body: face where she glides; once slow, turn to face the flower (angles eased with p.lerp)
+    // body: face where she glides, blended CONTINUOUSLY toward the flower as she slows (no switch at
+    // a speed threshold), and turned by a critically damped spring with a capped turn rate, sub-stepped
+    // like the path, so starts, stops and reversals turn her smoothly at any frame rate
     const hs = Math.hypot(vel.x, vel.z);
-    const wantYaw = hs > 0.35 ? Math.atan2(vel.x, -vel.z) : Math.atan2(G.center[0] - pos.x, -(G.center[2] - pos.z));
-    const dy = Math.atan2(Math.sin(wantYaw - F.yaw), Math.cos(wantYaw - F.yaw));
-    const prevYaw = F.yaw;
-    F.yaw += p.lerp(0, dy, 1 - Math.exp(-4 * dt));
-    F.yawRate = dt > 0 ? (F.yaw - prevYaw) / dt : 0;
+    const yawFlower = Math.atan2(G.center[0] - pos.x, -(G.center[2] - pos.z));
+    const yawVel = hs > 1e-3 ? Math.atan2(vel.x, -vel.z) : yawFlower;
+    const wv = U.smooth(0.25, 1.8, hs);
+    const wantYaw = yawFlower + wv * Math.atan2(Math.sin(yawVel - yawFlower), Math.cos(yawVel - yawFlower));
+    yawSpring(G, wantYaw, n, h);
     F.speed = hs; F.flySpeed = hs; F.vy = vel.y;
-    F.bank = U.damp(F.bank, U.clamp(-F.yawRate * 0.35, -0.4, 0.4), 4, dt);
     F.upright = U.damp(F.upright, 0, 2, dt);
     // arrived: close to the target and slow (with hysteresis, so it never flickers)
     const dT = p5.Vector.dist(pos, gTarget), sp = vel.mag();
@@ -311,10 +496,14 @@ AG.Flight = (function () {
     // a held ← or → tightens gradually (up to turnRate × (1 + turnTighten)), so a sustained
     // turn becomes a controlled U-turn; short presses steer exactly as before
     let turn = steerTurn(FC, input, dt);
+    // the player's own input pauses Round 02's doorway assists for a moment (0 in Round 01)
+    sinceSteer = F.steering ? 0 : sinceSteer + dt;
+    sinceVert = k.up || k.down || liftLeft > 0.05 || pendingLift > 0 ? 0 : sinceVert + dt;
+    const turnAssist = (F.assistTurn || 0) * U.smooth(0.8, 2.0, sinceSteer), vyAssist = (F.assistVy || 0) * U.smooth(1.5, 3.0, sinceVert);
     // ---- near buildings: a gentle look-ahead turn and facade alignment, only when she is not
     //      being steered (the player's input always wins); collisions themselves slide (move) ----
     // (+ Round 02's gentle line-up with the doorway, assistTurn: 0 in Round 01)
-    if (!F.steering) turn += avoidTurn(FC, FC.avoidTurn, dt) + alignTurn(FC) + (F.assistTurn || 0);
+    if (!F.steering) turn += avoidTurn(FC, FC.avoidTurn, dt) + alignTurn(FC) + turnAssist;
     else { F.avoidSide = 0; F.avoiding = false; }
     F.yawRate = U.damp(F.yawRate, U.clamp(turn, -1.8, 1.8), 3.2, dt);
     F.yaw += F.yawRate * dt;
@@ -325,8 +514,10 @@ AG.Flight = (function () {
                 : U.damp(F.speed, boosting ? FC.boostMax : FC.cruise, FC.accel, dt);
     // vertical: a level glide by default; taps/double-taps add metres to climb (liftLeft), followed
     // with an eased vertical speed (≤ riseSpeed) so the rise never snaps; ↓ descends and cancels it
-    if (k.down || F.assistHold) liftLeft = 0;            // (assistHold: Round 02, lined up with the doorway)
-    const targetVy = k.down ? -FC.descend : liftLeft > 0.05 ? Math.min(FC.riseSpeed, 2 + liftLeft * 1.3) : (F.assistVy || 0);
+    // (Round 02's doorway height assist, vyAssist, only steers her when the player has not asked
+    //  for height: a tap or double-tap of ↑ always climbs, as in the city)
+    if (k.down) liftLeft = 0;
+    const targetVy = k.down ? -FC.descend : liftLeft > 0.05 ? Math.min(FC.riseSpeed, 2 + liftLeft * 1.3) : vyAssist;
     F.vy = U.damp(F.vy, targetVy, 2.4, dt);
     if (F.vy > 0) liftLeft = Math.max(0, liftLeft - F.vy * dt);
     move(dt, FC);
@@ -463,5 +654,5 @@ AG.Flight = (function () {
     return best;
   }
 
-  return Object.assign(F, { PHASES, phaseK, build, reset, resetMotion, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight, press, enterGarden, exitGarden });
+  return Object.assign(F, { PHASES, phaseK, build, reset, resetMotion, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight, press, enterGarden, exitGarden, setVel, carryLift, gardenImpulse });
 })();

@@ -100,6 +100,8 @@ body.entered #hud { opacity: 1; }
   text-shadow: 0 0 10px rgba(255, 120, 200, 0.55), 0 0 2px rgba(0, 0, 0, 0.6); opacity: 0; transition: opacity 0.6s;
 }
 #fragGoal.show { opacity: 1; }
+/* Round 02: the next target, with a dot in its building's colour (js/ui/ui.js sets --gc) */
+#fragGoal.next::before { content: ''; display: inline-block; width: 8px; height: 8px; margin: 0 9px 1px 0; border-radius: 50%; vertical-align: middle; background: var(--gc); box-shadow: 0 0 8px var(--gc); }
 @media (max-width: 860px) { #fragGoal { font-size: 11px; letter-spacing: 0.2em; padding: 4px 11px; } }
 #fragHud {
   position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%) translateY(6px); z-index: 11; pointer-events: none;
@@ -289,14 +291,14 @@ body.ended #titleReveal { opacity: 0; transition: opacity 1.6s ease; }
 #stageCount i.on { border-color: transparent; box-shadow: 0 0 12px currentColor; background: currentColor; }
 #hintRing {
   position: fixed; left: 0; top: 0; width: 64px; height: 64px; margin: -32px; border-radius: 50%; z-index: 9; pointer-events: none;
-  border: 1.5px solid rgba(255, 210, 230, 0.75); box-shadow: 0 0 18px rgba(255, 120, 200, 0.5); opacity: 0; transition: opacity 0.8s;
+  border: 1.5px solid var(--hint-col, rgba(255, 210, 230, 0.75)); box-shadow: 0 0 18px var(--hint-col, rgba(255, 120, 200, 0.5)); opacity: 0; transition: opacity 0.8s;
   animation: hintPulse 1.6s ease-in-out infinite;
 }
 #hintRing.show { opacity: 1; }
 @keyframes hintPulse { 0%, 100% { transform: scale(0.85); } 50% { transform: scale(1.15); } }
 #hintArrow { position: fixed; left: 0; top: 0; width: 34px; height: 34px; margin: -17px; z-index: 9; pointer-events: none; opacity: 0; transition: opacity 0.8s; }
 #hintArrow.show { opacity: 0.9; }
-#hintArrow svg { width: 100%; height: 100%; fill: none; stroke: #ffd2e6; stroke-width: 2.2; filter: drop-shadow(0 0 6px rgba(255, 120, 200, 0.9)); }
+#hintArrow svg { width: 100%; height: 100%; fill: none; stroke: var(--hint-col, #ffd2e6); stroke-width: 2.2; filter: drop-shadow(0 0 6px var(--hint-col, rgba(255, 120, 200, 0.9))); }
 #ripples { position: fixed; inset: 0; z-index: 9; pointer-events: none; }
 #ripples span { position: absolute; width: 16px; height: 16px; margin: -8px; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.7); animation: ripple 0.9s ease-out forwards; }
 #ripples span.hit { border-color: rgba(255, 210, 160, 0.95); box-shadow: 0 0 16px rgba(255, 170, 90, 0.8); animation-duration: 1.4s; }
@@ -318,6 +320,15 @@ body.stage-find #stage canvas, body.stage-restore #stage canvas { cursor: crossh
 #thread line { stroke-width: 2px; stroke-linecap: round; filter: drop-shadow(0 0 6px currentColor) drop-shadow(0 0 2px #fff); }
 #thread.far line { stroke-dasharray: 3 7; opacity: 0.55; }
 body.cinematic #hintRing, body.cinematic #hintArrow { opacity: 0 !important; }
+/* Round 02: the completed buildings' landmark markers (js/ui/ui.js landmarkMarks) */
+#landmarks { position: fixed; inset: 0; z-index: 9; pointer-events: none; overflow: hidden; }
+#landmarks .lm { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity 0.6s; }
+#landmarks .lm.show { opacity: 0.85; }
+#landmarks .lm i { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--c); box-shadow: 0 0 8px var(--c); }
+#landmarks .lm.edge i { background: var(--c); }
+#landmarks .lm b { display: none; position: absolute; left: 8px; top: -5px; width: 0; height: 0; border-left: 7px solid var(--c); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+#landmarks .lm.edge b { display: block; }
+body.cinematic #landmarks, body.garden-inside #landmarks { opacity: 0; }
 #timeText { min-width: 9em; text-align: right; letter-spacing: 0.12em; }
 body.entered:not(.flying) #stage canvas { cursor: crosshair; }
 
@@ -336,12 +347,66 @@ body.entered:not(.flying) #stage canvas { cursor: crosshair; }
 #gardenButtons button { font: inherit; font-size: 11px; letter-spacing: 0.14em; color: #f3e9ff; background: rgba(20, 10, 32, 0.55); cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 14px; padding: 8px 13px; }
 #gardenButtons button:hover { border-color: rgba(255, 122, 208, 0.8); }
-#gardenMeter { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); width: min(320px, calc(100vw - 32px)); text-align: center; font-size: 12px; letter-spacing: 0.18em; color: #f3e9ff; }
-#gardenMeter .track { height: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); margin-top: 6px; overflow: hidden; }
-#gardenBar { height: 100%; width: 0; background: linear-gradient(90deg, #9f87ff, #ff7ad0, #ffc56e); }
 @media (max-width: 860px) {
-  #gardenButtons { left: 16px; right: 16px; bottom: 130px; justify-content: center; }
-  #gardenMeter { bottom: 84px; }
+  #gardenButtons { left: 16px; right: 16px; bottom: 84px; justify-content: center; }
 }
 .chip.r2 { margin-left: 6px; border-style: dashed; }
 .chip.r2.active { border-style: solid; color: #fff; border-color: var(--magenta); box-shadow: 0 0 10px rgba(255, 42, 158, 0.35); }
+
+/* Round 02 · progress (js/garden/r2Hud.js). Read-only: it never takes the pointer. Round 02 only. */
+#r2Hud { --r2a: #ff7ad0; --r2b: #ffc56e; position: fixed; right: 18px; top: 18px; z-index: 14; width: 214px; box-sizing: border-box; padding: 8px 12px; border-radius: 12px;
+  font-size: 11px; letter-spacing: 0.08em; color: rgba(243, 233, 255, 0.86); background: rgba(20, 10, 32, 0.42); border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0; visibility: hidden; transition: opacity 0.8s, visibility 0.8s; pointer-events: none; user-select: none; -webkit-user-select: none; }
+body.garden #r2Hud { opacity: 1; visibility: visible; }
+#r2Hud [hidden] { display: none; }
+#cityBloom { letter-spacing: 0.18em; text-transform: uppercase; }
+#cityBloom b { font-weight: 600; color: #fff; }
+#r2SiteRow { display: flex; align-items: center; gap: 7px; margin-top: 6px; }
+#r2SiteRow i { width: 9px; height: 9px; flex: none; border-radius: 50%; background: linear-gradient(135deg, var(--r2a), var(--r2b)); }
+#r2SiteRow b { font-weight: 600; color: #fff; letter-spacing: 0.12em; }
+#r2SiteNote { margin-left: auto; font-size: 10px; color: rgba(243, 233, 255, 0.66); }
+.r2-row { display: flex; align-items: center; gap: 7px; margin-top: 5px; font-size: 10px; }
+.r2-row > span:first-child { width: 58px; flex: none; }
+.r2-bar { flex: 1; min-width: 0; height: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.r2-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--r2a), var(--r2b)); }
+.r2-pct { width: 30px; flex: none; text-align: right; font-variant-numeric: tabular-nums; color: #fff; }
+#r2Stage { margin-top: 5px; font-size: 10px; color: rgba(243, 233, 255, 0.66); }
+#r2Line { position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); z-index: 14; margin: 0; width: max-content; max-width: min(620px, calc(100vw - 32px)); box-sizing: border-box; text-align: center;
+  font-size: 16px; font-style: italic; line-height: 1.4; letter-spacing: 0.03em; color: #fff; text-shadow: 0 0 12px rgba(20, 8, 34, 0.95), 0 1px 3px rgba(20, 8, 34, 0.9); opacity: 0; pointer-events: none; }
+/* the instructions make room for the HUD before they would run under it */
+@media (max-width: 1240px) {
+  #gardenPanel { left: 16px; top: 46px; transform: none; max-width: calc(100vw - 264px); text-align: left; }
+  #r2Line { bottom: 128px; }
+}
+@media (max-width: 860px) {
+  #r2Line { bottom: 132px; font-size: 14px; }
+}
+/* phone width: one strip under the brand, two short bars side by side, no stage caption */
+@media (max-width: 640px) {
+  #r2Hud { left: 8px; right: 8px; top: 44px; width: auto; display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-items: center; padding: 6px 10px; }
+  #cityBloom { letter-spacing: 0.1em; font-size: 10px; }
+  #r2SiteRow { margin-top: 0; justify-self: end; }
+  .r2-row { margin-top: 5px; }
+  .r2-row > span:first-child { width: 60px; }
+  #r2BloomRow, #r2FormRow { grid-column: 1 / -1; }
+  #r2Stage { display: none; }
+  /* in flight the goal and the hint own the top of a phone: the HUD waits above the controls */
+  body.garden:not(.garden-inside) #r2Hud { top: auto; bottom: 72px; }
+  body.garden:not(.garden-inside) #r2Line { bottom: 150px; }
+  #gardenPanel { left: 8px; right: 8px; top: 100px; width: auto; max-width: none; padding: 6px 10px; }
+  #gardenPanel .g-title { display: none; }
+  #gardenPanel .g-text { font-size: 11px; line-height: 1.35; }
+}
+
+/* ---------- Round 02 · Ending Preview (testing only) ---------- */
+.chip.dev { margin-left: 6px; border-style: dotted; }
+body:not(.garden) .chip.dev { opacity: 0.35; }
+#previewBar { position: fixed; left: 50%; top: 132px; transform: translateX(-50%); z-index: 9; display: none; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100vw - 32px); padding: 7px 10px; border-radius: 14px; border: 1px dashed rgba(255, 220, 170, 0.55); background: rgba(14, 8, 28, 0.72); backdrop-filter: blur(6px);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; color: var(--ink); }
+body.r2-preview #previewBar { display: flex; }
+#previewBar .pv-label i { font-style: normal; color: var(--dim); letter-spacing: 0.04em; }
+#previewBar button { font: inherit; letter-spacing: 0.06em; color: var(--ink); background: transparent; border: 1px solid var(--faint); border-radius: 10px; padding: 5px 9px; cursor: pointer; }
+#previewBar button:hover { border-color: var(--ink); color: #fff; }
+body.cinematic #previewBar { display: none; }
+@media (max-width: 860px) { #previewBar { top: 74px; } }

@@ -242,7 +242,13 @@ AG.Camera = (function () {
     const F = AG.FSM, cin = F.cinematic;
     if (cin) { const c = cinematicPose(cin); if (c) return c; }
     if (!(F.state === 'AFTERGLOW' && (AG.Flight.arc || AG.Flight.finale)) && arcOn) { arcOn = false; arcSide = -arcSide; }
-    if (F.state === 'AFTERGLOW') return AG.Flight.finale ? finalePose() : AG.Flight.arc ? ascensionPose(at) : chase();
+    if (F.state === 'AFTERGLOW') {
+      if (AG.Flight.finale) return finalePose();
+      if (AG.Flight.arc) return ascensionPose(at);
+      // Round 02, out of a transformed building: the reveal shot, then the chase (null in Round 01)
+      const c = chase(), gp = AG.Garden && AG.Garden.cameraPose ? AG.Garden.cameraPose(c) : null;
+      return gp || c;
+    }
     return explorePose(dt, input);
   }
 
@@ -312,7 +318,8 @@ AG.Camera = (function () {
     if (desired.anchor && lastAnchor) { const dlt = V.sub(desired.anchor, lastAnchor); cur.pos = V.add(cur.pos, dlt); cur.target = V.add(cur.target, dlt); }
     lastAnchor = desired.anchor ? desired.anchor.slice() : null;
     cur.pos = cur.pos.map((v, i) => U.damp(v, pos[i], rate, dt));
-    cur.target = cur.target.map((v, i) => U.damp(v, target[i], desired.rate ? desired.rate * 2.5 : desired.flight ? 12 : desired.explore ? 10 : rate, dt));
+    // (a pose may ask for its look point to snap with the position on a cut: Round 02's reveal shot)
+    cur.target = cur.target.map((v, i) => U.damp(v, target[i], snap && desired.snapLook ? 1e6 : desired.rate ? desired.rate * 2.5 : desired.flight ? 12 : desired.explore ? 10 : rate, dt));
     cur.fov = U.damp(cur.fov, fov, snap ? 1e6 : 2.5, dt);
     cur.close = U.damp(cur.close, desired.close || 0, snap ? 1e6 : 1.5, dt);
     snap = false;

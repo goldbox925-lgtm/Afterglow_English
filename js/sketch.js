@@ -79,6 +79,7 @@
       AG.ScreenWords.init(p);
       AG.Story.bindEvents();
       AG.Garden.init(p);
+      AG.Gardens.init(p); AG.R2.init(p); AG.Living.init(p);       // Round 02's data streams and the building's transformation
       AG.UI.setLoading('Generating the city…', false);
       AG.CharacterAssets.load(p, 'A');
       setTimeout(() => {
@@ -161,7 +162,9 @@
         white = U.smooth(1.05, 0.55, q) * 0.3 * S.cloudGlow;      // a thin veil: she stays visible inside the cloud
       }
       AG.Renderer.white = U.damp(AG.Renderer.white || 0, white, 4, dt);
-      AG.R2.update(dt);                       // Round 02's shared state and phase (js/garden/round2.js)
+      AG.R2.update(dt);                       // Round 02's shared state, phase and data streams (js/garden/round2.js)
+      AG.R2Hud.update(dt);                    // Round 02's progress HUD and narrative lines (reads that state)
+      AG.Living.update(dt);                   // the building's transformation reads them (js/garden/living.js)
       // Round 02: inside the doorway the Memory Garden replaces the city image
       if (AG.Garden.drawsScene()) AG.Garden.draw(playing ? dt : 0, CH);
       else AG.Renderer.render(S, cam, F.animTime, rt, CH, F.animTime);
@@ -249,7 +252,13 @@
         if (c && !(e.why === 'jump' && e.state === 'FRACTURE')) AG.FSM.startCinematic(c[0], c[1]);
         AG.Camera.snapNext();
       });
-      document.addEventListener('visibilitychange', () => { if (document.hidden && AG.FSM.playing) AG.FSM.pause(); });
+      // a hidden tab pauses the story. Round 02 only: coming back resumes the flight by itself (it was
+      // not the player's pause); Round 01 keeps its manual resume.
+      let hidPause = false;
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && AG.FSM.playing) { AG.FSM.pause(); hidPause = true; }
+        else if (!document.hidden) { if (hidPause && AG.Garden.isActive() && !AG.FSM.playing) AG.FSM.play(); hidPause = false; }
+      });
       // arrow keys: look around (01–04) · steer / descend / ASCEND (05). Never scroll the page.
       const ARROW = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', a: 'left', A: 'left', d: 'right', D: 'right', s: 'down', S: 'down' };
       const setKey = (k, v) => { const n = ARROW[k]; if (!n) return false; AG.Flight.press(n, v); return true; };
@@ -260,7 +269,7 @@
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown'].includes(e.key)) e.preventDefault();
         if (!entered) { if (e.key === 'Enter' || e.key === ' ') enter(); return; }
         const k = e.key;
-        if (setKey(k, true)) return;
+        if (setKey(k, true)) { if (AG.Garden.isActive() && !AG.FSM.playing) AG.FSM.play(); return; }   // (Round 02: steering resumes a paused flight)
         if (k === ' ') handlers.toggle();
         else if (k === 'r' || k === 'R') handlers.replay();
         else if (k === 'b' || k === 'B') AG.Reactivity.toggleDebug();   // temporary audio debug view
@@ -272,6 +281,7 @@
         else if (k === 'Escape') AG.UI.toggleHelp(false);
         else if (k >= '1' && k <= '5') handlers.jump(C.states.at(Number(k) - 1).id);
         else if (k === '6') handlers.jumpR2();                         // R02 — Memory Garden
+        else if (k === '7' && AG.Garden.isActive()) { if (AG.Garden.inPreview()) AG.Garden.endPreview(); else AG.Garden.previewEnding(); }   // testing: Round 02's ending preview (again: back)
         else if (k === 'q' || k === 'Q') {
           const opts = ['auto', 'low', 'balanced', 'high'];
           const nq = opts[(opts.indexOf(qualityMode) + 1) % opts.length];
