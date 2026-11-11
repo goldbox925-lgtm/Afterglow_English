@@ -88,7 +88,8 @@ AG.GardenScene = {
       // on a narrow (portrait) screen the camera stands back so the open flower (≈ 4.6 m to each
       // side of its centre) still fits across; on wider screens cam.dist is used as it is
       const aspect = p.width / p.height, dist = Math.max(Math.min(cam.dist, (cam.maxR || Infinity) / Math.max(cp, 0.2)), 5.2 / (Math.tan(cam.fov * Math.PI / 360) * aspect));
-      view.eye = [cam.target[0] + Math.sin(cam.yaw) * cp * dist, cam.target[1] + Math.sin(cam.pitch) * dist, cam.target[2] + Math.cos(cam.yaw) * cp * dist];
+      // (cam.eye, when set, places the eye directly: the game's camera following her out, js/garden/garden.js)
+      view.eye = cam.eye ? cam.eye.slice() : [cam.target[0] + Math.sin(cam.yaw) * cp * dist, cam.target[1] + Math.sin(cam.pitch) * dist, cam.target[2] + Math.cos(cam.yaw) * cp * dist];
       view.V = U.mat4.lookAt(view.eye, cam.target, [0, 1, 0]);
       view.P = U.mat4.perspective(cam.fov * Math.PI / 180, p.width / p.height, 0.05, 300);
     }
@@ -142,7 +143,7 @@ AG.GardenScene = {
     }
     function up() { if (mode === 'flower') flower.pointerUp(); mode = null; }
     function wheel(d) { cam.dist = p.constrain(cam.dist * Math.exp(d * 0.001), 6, 20); }   // (≤ 20 m: inside the atrium's glass, r = 24 m)
-    function resetView() { cam.yaw = 0.55; cam.pitch = 0.08; cam.dist = 15.5; mode = null; }
+    function resetView() { cam.yaw = 0.55; cam.pitch = 0.08; cam.dist = 15.5; cam.target = [0, 4.2, 0]; cam.eye = null; mode = null; }
 
     /* the flower's own origin in p5's transform stack (shared by the receptacle and the petals):
        reset → its base → p.scale (growth / click swell / breathing / 100 % pulse, js/garden/flower.js

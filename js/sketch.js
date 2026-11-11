@@ -163,6 +163,7 @@
       }
       AG.Renderer.white = U.damp(AG.Renderer.white || 0, white, 4, dt);
       AG.R2.update(dt);                       // Round 02's shared state, phase and data streams (js/garden/round2.js)
+      AG.R2Hud.update(dt);                    // Round 02's progress HUD and narrative lines (reads that state)
       AG.Living.update(dt);                   // the building's transformation reads them (js/garden/living.js)
       // Round 02: inside the doorway the Memory Garden replaces the city image
       if (AG.Garden.drawsScene()) AG.Garden.draw(playing ? dt : 0, CH);

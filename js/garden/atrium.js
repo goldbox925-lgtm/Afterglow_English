@@ -31,6 +31,7 @@ AG.Atrium = {
   create(p, opts) {
     const U = AG.U, V3 = U.v3;
     const FL = -1, R = 24, WALL = 28, DOME = 44, NF = 36, ROWS = 7, DR = 7;
+    const OPEN_HALF = 0.349, OPEN_Y = [FL + (WALL - FL) / ROWS, FL + 3 * (WALL - FL) / ROWS];   // the exit opening: ±20° (four facets) × the 2nd and 3rd glass bands
     const A = { R, FL, WALL, DOME, built: false, pollen: [], petals: [], spr: new Float32Array(64 * 4), sprC: new Float32Array(64 * 4) };
     let SH = null, geo = null, cityInfo = null, walks = [], planters = [];
 
@@ -233,7 +234,11 @@ AG.Atrium = {
         winA: lk ? lk.winA : [0, 0, 0], winB: lk ? lk.winB : [0, 0, 0], breath: lk ? lk.breath : 1,
         // the plants' colours deepen as the flower opens and at the end of the transformation
         pink: rgb(p.lerpColor(COL.pink, COL.pinkRich, p.max(0.25 + s.bloom * 0.35, St.E))), lav: rgb(p.lerpColor(COL.lav, COL.lavRich, p.max(0.45 + s.bloom * 0.3, St.E))),
-        goldNear: St.C, goldR: St.C * 48
+        goldNear: St.C, goldR: St.C * 48,
+        // THE FLIGHT OUT (js/garden/garden.js): the final light rising through the hall (0..1), and the
+        // glass panel on the doorway's side opening (0..1) — 0 whenever she is not leaving that way
+        final: s.exitFx ? s.exitFx.final : 0,
+        open: s.exitFx ? [s.exitFx.dir[0], s.exitFx.dir[1], s.exitFx.open, OPEN_HALF] : [1, 0, 0, OPEN_HALF]
       };
       // idle sway: slow p.noise wind (above) plus a p.sin / p.cos drift; a light ripple through the
       // plants while the flower is being dragged (p.lerp to smooth it, p.deltaTime through dt)
@@ -292,12 +297,17 @@ AG.Atrium = {
       sh.city.setUniform('uFogCol', [0.2, 0.11, 0.3]); sh.city.setUniform('uSkyLow', [0.42, 0.16, 0.42]); sh.city.setUniform('uFloorY', 0);
       geo.city.forEach((g) => p.model(g));
     }
+    function exitUniforms(sh) {
+      sh.setUniform('uFinal', A.fx.final || 0); sh.setUniform('uOpen', A.fx.open); sh.setUniform('uOpenY', OPEN_Y);
+      sh.setUniform('uRoomR', R); sh.setUniform('uRoomTop', DOME);
+    }
     function drawSolid(vw, t, s) {
       const sh = shaders(); p.shader(sh.solid); common(sh.solid, vw, t);
       sh.solid.setUniform('uWarmPos', [0, 1.2, 0]); sh.solid.setUniform('uWarm', 0.8 + 0.6 * (s.core || 0) + 0.5 * (s.prox || 0));
       sh.solid.setUniform('uStripCol', A.strip); sh.solid.setUniform('uKeyCol', [0.75, 0.72, 1.0]); sh.solid.setUniform('uProx', s.prox || 0);
       sh.solid.setUniform('uEnergy', A.fx.energy); sh.solid.setUniform('uFrontY', A.fx.frontY); sh.solid.setUniform('uBreath', A.fx.breath);
       sh.solid.setUniform('uLight', A.fx.light); sh.solid.setUniform('uLightR', A.fx.lightR); sh.solid.setUniform('uAccent', look.fx); sh.solid.setUniform('uRimCol', A.rimCol);
+      exitUniforms(sh.solid);
       geo.solid.forEach((g) => p.model(g));
     }
     function drawPlants(vw, t, s, reflection) {
@@ -321,9 +331,11 @@ AG.Atrium = {
       sh.glass.setUniform('uTintA', [0.45, 0.75, 1.0]); sh.glass.setUniform('uTintB', [0.75, 0.6, 1.0]); sh.glass.setUniform('uProx', s.prox || 0);
       sh.glass.setUniform('uWin', A.fx.win); sh.glass.setUniform('uWinA', A.fx.winA); sh.glass.setUniform('uWinB', A.fx.winB);
       sh.glass.setUniform('uDome', A.fx.dome); sh.glass.setUniform('uBreath', A.fx.breath); sh.glass.setUniform('uAccent', look.fx); sh.glass.setUniform('uRimCol', A.rimCol);
+      exitUniforms(sh.glass);
       geo.glass.forEach((g) => p.model(g));
     }
 
+    A.walks = () => walks;
     return Object.assign(A, { build, activate, dispose, update, drawCity, drawSolid, drawPlants, drawFloor, drawGlass });
   }
 };

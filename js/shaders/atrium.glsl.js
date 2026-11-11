@@ -40,6 +40,23 @@ uniform vec3 uHazeCol; uniform float uHazeK;
 vec3 haze(vec3 c, vec3 wp){ float d = length(wp - uCamPos); return mix(c, uHazeCol, 1.0 - exp(-d * uHazeK)); }
 `;
 
+/* THE FLIGHT OUT (js/garden/garden.js, after the transformation): shared by the frame and the glass.
+   uFinal 0..1   a band of the building's light rising from the floor to the top of the dome
+   uOpen         (dir.x, dir.z, k, half-angle): the glass and the frame within the half-angle of dir
+                 and between uOpenY dissolve away from the opening's centre as k goes 0 → 1, with a
+                 bright edge where they are dissolving                                             */
+AG.SHADERS.atriumExit = `
+uniform float uFinal, uRoomR, uRoomTop; uniform vec4 uOpen; uniform vec2 uOpenY;
+// 0 at the opening's centre, 1 at its edge (> 1 outside); a large value when far from the wall
+float openE(vec3 wp){
+  if (uOpen.z <= 0.0 || length(wp.xz) < uRoomR - 1.3) return 9.0;
+  float a = atan(wp.z, wp.x), d = atan(sin(a - atan(uOpen.y, uOpen.x)), cos(a - atan(uOpen.y, uOpen.x)));
+  float hy = (uOpenY.y - uOpenY.x) * 0.5, cy = (uOpenY.x + uOpenY.y) * 0.5;
+  return max(abs(d) / uOpen.w, abs(wp.y - cy) / hy) + (vnoise2(wp.xy * 0.9 + wp.zx * 0.7) - 0.5) * 0.12;
+}
+float finalBand(vec3 wp){ return uFinal > 0.0 ? exp(-pow((wp.y - mix(-2.0, uRoomTop + 4.0, uFinal)) * 0.35, 2.0)) * (1.0 - smoothstep(0.8, 1.0, uFinal)) : 0.0; }
+`;
+
 AG.SHADERS.atriumSolid = {
   vert: AG.SHADERS.header + `
 in vec3 aPosition; in vec3 aNormal; in vec2 aTexCoord; in vec4 aVertexColor;
@@ -50,7 +67,7 @@ void main(){
   gl_Position = uProj * uView * vec4(aPosition, 1.0);
 }
 `,
-  frag: AG.SHADERS.header + AG.SHADERS.common + AG.SHADERS.atriumHaze + `
+  frag: AG.SHADERS.header + AG.SHADERS.common + AG.SHADERS.atriumHaze + AG.SHADERS.atriumExit + `
 in vec3 vWorld; in vec3 vN; in vec2 vUv; in vec4 vData;
 out vec4 outColor;
 uniform vec3 uWarmPos, uStripCol, uKeyCol; uniform float uWarm, uProx;
@@ -58,6 +75,8 @@ uniform float uEnergy, uFrontY, uBreath;       // the transformation (stage B): 
 uniform float uLight, uLightR;                 // (stage A): the golden wave, which crosses the platform first
 uniform vec3 uAccent, uRimCol;                 // the building's own warm light and planter rims
 void main(){
+  float oe = openE(vWorld);
+  if (oe < uOpen.z) discard;                     // the opening (the flight out)
   vec3 N = normalize(vN), V = normalize(uCamPos - vWorld);
   if (dot(N, V) < 0.0) N = -N;
   float mat = vData.x;
@@ -106,6 +125,9 @@ void main(){
       c += uAccent * (lit * 0.2 + wave * 0.75) * uBreath;
     }
   }
+  // the final light: a band rising through the frame (strongest on the light strips)
+  c += uAccent * finalBand(vWorld) * (0.6 + 3.0 * strip) * uBreath;
+  c += mix(uAccent, vec3(1.0), 0.4) * exp(-pow((oe - uOpen.z) * 14.0, 2.0)) * step(0.001, uOpen.z) * 2.2;   // the dissolving edge
   c = haze(c, vWorld);
   outColor = vec4(c, 1.0);
 }
@@ -114,12 +136,14 @@ void main(){
 
 AG.SHADERS.atriumGlass = {
   vert: AG.SHADERS.atriumSolid.vert,
-  frag: AG.SHADERS.header + AG.SHADERS.common + AG.SHADERS.atriumHaze + `
+  frag: AG.SHADERS.header + AG.SHADERS.common + AG.SHADERS.atriumHaze + AG.SHADERS.atriumExit + `
 in vec3 vWorld; in vec3 vN; in vec2 vUv; in vec4 vData;
 out vec4 outColor;
 uniform vec3 uTintA, uTintB; uniform float uProx;
 uniform vec3 uWinA, uWinB, uAccent, uRimCol; uniform float uWin, uDome, uBreath;     // the transformation: panes light as windows, the dome glows
 void main(){
+  float oe = openE(vWorld);
+  if (oe < uOpen.z) discard;                     // the opening (the flight out)
   vec3 N = normalize(vN), V = normalize(uCamPos - vWorld);
   float ndv = abs(dot(N, V)), fr = pow(1.0 - ndv, 3.0);
   // thin-film colour on the glass, strongest at grazing angles
@@ -143,7 +167,11 @@ void main(){
   vec3 em = mix(uWinA, uWinB, hash11(vData.z * 53.0 + 1.7)) * on * (1.0 - 0.45 * dot(pq, pq)) * (0.12 + 0.025 * sin(uTime * 1.3 + th * 30.0));
   float high = smoothstep(14.0, 44.0, vWorld.y);
   em += mix(uRimCol, uAccent, high) * uDome * high * mix(0.14, 0.5, vData.x);
-  outColor = vec4(c * a + c * 0.25 * edge + em * uBreath, a);
+  // the final light rising across the panes, and the bright rim of the opening as it dissolves
+  em += mix(uAccent, vec3(1.0), 0.25) * finalBand(vWorld) * 0.9;
+  float rim = exp(-pow((oe - uOpen.z) * 12.0, 2.0)) * step(0.001, uOpen.z);
+  em += mix(uAccent, vec3(1.0), 0.4) * rim * 1.6;
+  outColor = vec4(c * a + c * 0.25 * edge + em * uBreath, max(a, rim * 0.6));
 }
 `
 };

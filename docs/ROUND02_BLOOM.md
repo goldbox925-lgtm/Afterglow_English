@@ -19,13 +19,14 @@ callbacks in `js/sketch.js`.
 **She is in the garden:** her flight continues inside, through `AG.Flight`'s garden mode.
 - She glides in from the left of the view, slows down and settles beside the flower, then turns
   from her flying pose to levitating.
-- ← → fly her round the flower; ↑ ↓ change her height.
+- ← → fly her round the flower, fast, facing where she goes; tap ↑ to rise (double-tap for more),
+  hold ↑ / ↓ to climb or descend.
 - As she comes close, the flower glows warmer, the petals facing her lean toward her, and the
   motes drift to her.
 - A click on the heart before she has arrived waits for her.
 
 **At 100 % the building awakens** (Phase 4, `js/garden/living.js`). The stages follow each
-other over about 40 s; the meter shows the stage and its progress.
+other over about 40 s; the progress HUD (top right) shows the bloom, the transformation and the stage.
 - **Inside** (the atrium round the flower): a golden wave across the platform and floor, energy
   climbing the frames, the glass panes lighting one by one, gold spreading through the hanging wisteria, a rosette
   of light and a glowing dome, and finally breathing.
@@ -45,7 +46,7 @@ Round 01 is unchanged and ends as before: fifth fragment → glide → ascent �
 | Approach | Free flight again over the restored city, about 170 m in front of one building. Its facade has opened into an arched **doorway of light**, with a column of light above its roof. The fragments are off. The goal pill says *Fly through the doorway of light*, and the edge arrow points to it while it is off screen. |
 | Help on the way in | Within about 220 m, roughly heading for it, with hands off the controls: she lines up gently (turn ≤ 0.45 rad/s, height). The look-ahead avoidance is off, so it never turns her away from the doorway. In the last ~110 m, a rise still pending is dropped (↓ still works). Steering always wins. |
 | Enter | Through the opening: she glides on into the light and the screen fades to white (1.1 s). |
-| Inside | The Memory Garden: the flower, exactly as in the preview. Click the heart · drag outward to unfold · drag elsewhere to look around · wheel to zoom. A meter shows the stage and %. **Close the bud** resets the flower. |
+| Inside | The Memory Garden: the flower, exactly as in the preview. Click the heart · drag outward to unfold · drag elsewhere to look around · wheel to zoom. The progress HUD shows the building, the bloom and the transformation. **Close the bud** resets the flower. |
 | Back to the city | Fades out and puts her just outside the doorway, facing away. The flower keeps its state, so flying back in continues where she left it. |
 | Play again / R / a stage jump | Closes the doorway and resets the garden. |
 
@@ -285,3 +286,6 @@ into no-ops in the page.
 - No sound in the garden. The city's soundtrack keeps playing.
 - The game now has five palettes of this flower, one per building (`js/garden/gardens.js`; see
   phase 6 in `ROUND02_PLAN.md`). This preview keeps the default palette and has no city.
+- When a building's transformation completes while she is inside, the atrium opens and she flies
+  out to the city. The rooftop reveal and the guidance to the next building follow. See "Flight
+  out, rooftop reveal and next target" in `ROUND02_PLAN.md`. The flower logic is unchanged.

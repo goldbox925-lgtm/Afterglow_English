@@ -86,8 +86,10 @@ AG.Living = (function () {
     const rise = [];
     for (let i = 0; i < 64; i++) rise.push({ pos: p.createVector(0, -1e4, 0), vel: p.createVector(0, 0, 0), life: 0, seed: p.random(100), size: p.random(0.5, 1.3), hue: p.random() });
 
+    // sparse sparkles on musical accents after completion (16 slots of the same sprite program)
+    const spark = []; for (let i = 0; i < 16; i++) spark.push({ pos: [0, -1e4, 0], life: 0, size: 1, col: [1, 1, 1] });
     site.living = {
-      seed, faces, rise, C: colours(site.cfg),
+      seed, faces, rise, spark, sparkSpr: new Float32Array(64 * 4), sparkSprC: new Float32Array(64 * 4), lastAcc: 0, sparkCd: 0, C: colours(site.cfg),
       facade: { walls: FW.build(p), vines: FV.build(p), H: FH, grid: [6.0, 4.4], origin: door.slice(), reach: Math.hypot(sx, sz) * 2 + FH },
       roof, roofY: site.rooftop.center[1], roofScale: site.rooftop.scale,
       spr: new Float32Array(64 * 4), sprC: new Float32Array(64 * 4), pv: p.createVector(0, 0, 0), ph: p.createVector(0, 0, 0)
@@ -117,6 +119,7 @@ AG.Living = (function () {
     const inside = AG.Garden.drawsScene();
     const camPos = inside ? [rf.center[0], rf.center[1] + 50, rf.center[2] + 80] : AG.Camera.state.pos;
     rf.update(dt, camPos);
+    awakening(site, built, inside ? 0 : AG.FSM.playing ? dt : 0, inside);
     // RISING PARTICLES: only where they can be seen
     built.spr.fill(0); built.sprC.fill(0);
     if (inside || p.dist(camPos[0], camPos[2], rf.center[0], rf.center[2]) > CFAR) return;
@@ -145,8 +148,83 @@ AG.Living = (function () {
       built.sprC.set([p.red(c) / 255, p.green(c) / 255, p.blue(c) / 255, a * 0.8], i * 4);
     }
   }
+  /* AFTER COMPLETION, the first time she is out in the city to see it (site.surge, 0 … 9 game
+     seconds, js/garden/gardens.js): the completion wave climbs the facade (≈ 3.5 s), and sparse
+     sparkles answer the music's accents round the building. Both read AG.Reactivity, whose values
+     already include the AUDIO REACTIVITY ON/OFF fade: with it OFF the wave still climbs (at its
+     plain strength) and no sparkle is born. Nothing here adds a sound source. */
+  const SEQ_T = 9;
+  function awakening(site, B, dt, inside) {
+    const R = AG.Reactivity, T = site.surge, on = site.completed && T > 0 && T < SEQ_T && !inside;
+    B.wave = on ? [(B.facade.H + 8) * U.smooth(0.1, 3.6, T) - 4, U.smooth(0, 0.35, T) * (1 - U.smooth(3.3, 4.6, T)) * (0.8 + 0.6 * R.drive.mid)] : [0, 0];
+    // sparkles: born on a RISING accent (an onset), a few at a time, short-lived, never near her
+    const acc = R.accent || 0;
+    B.sparkCd = Math.max(0, B.sparkCd - dt);
+    if (on && dt > 0 && acc > 0.42 && acc - B.lastAcc > 0.02 && B.sparkCd <= 0) {
+      B.sparkCd = 0.24;
+      const her = AG.Flight.pos, C = B.C, n = 2 + Math.floor(acc * 3);
+      for (let j = 0, made = 0; j < 16 && made < n; j++) {
+        const m = B.spark[j];
+        if (m.life > 0) continue;
+        const f = B.faces[Math.floor(p.random(B.faces.length))];
+        const q = p.random() < 0.3
+          ? V3.add(B.roof.center, [p.random(-1, 1) * B.roofScale, p.random(0.2, 1.1) * B.roofScale, p.random(-1, 1) * B.roofScale])
+          : V3.add(V3.add(V3.add(f.O, V3.scale(f.t, p.random(1, f.w - 1))), [0, p.random(2, f.h), 0]), V3.scale(f.n, p.random(1.5, 4)));
+        if (V3.len(V3.sub(q, her)) < 14) continue;
+        const c = p.lerpColor(p.lerpColor(C.pink, C.gold, p.random()), C.cyan, p.random(0, 0.3));
+        m.pos = q; m.life = 1; m.size = p.random(0.9, 1.6); m.col = [p.red(c) / 255, p.green(c) / 255, p.blue(c) / 255]; made++;
+      }
+    }
+    B.lastAcc = acc;
+    B.sparkSpr.fill(0); B.sparkSprC.fill(0);
+    B.sparks = 0;
+    for (let j = 0; j < 16; j++) {
+      const m = B.spark[j];
+      if (m.life <= 0) continue;
+      m.life = Math.max(0, m.life - dt / 0.7);
+      const a = Math.sin(Math.PI * m.life);                          // a quick glint: in and out
+      B.sparkSpr.set([m.pos[0], m.pos[1], m.pos[2], m.size * (0.6 + 0.6 * a)], j * 4);
+      B.sparkSprC.set([m.col[0], m.col[1], m.col[2], a * 0.9], j * 4);
+      if (m.life > 0) B.sparks++;
+    }
+  }
+
+  /* THE TRAIL (the flight out, js/garden/garden.js): a short line of light from where she came out
+     toward the next building's beacon, in the completed building's colours. It draws itself out
+     (≈ 2 s), shimmers (more with the treble when AUDIO REACTIVITY is ON), and fades by ≈ 7.5 s.
+     Only the first part of the way (≤ 160 m), and never over her. Game time: pause holds it. */
+  const TRAIL_N = 48;
+  let trail = null;
+  function startTrail(site, from, to) {
+    const d = V3.sub(to, from), L = Math.min(160, Math.hypot(d[0], d[2]) * 0.6);
+    if (!(L > 10)) { trail = null; return; }
+    const C = site.living ? site.living.C : colours(site.cfg), k = (c) => [p.red(c) / 255, p.green(c) / 255, p.blue(c) / 255];
+    trail = { from: from.slice(), dir: V3.norm([d[0], 0, d[2]]), rise: U.clamp(d[1], -30, 40) * (L / Math.max(1, Math.hypot(d[0], d[2]))), L, t: 0,
+      colA: k(C.pink), colB: k(C.gold), spr: new Float32Array(64 * 4), sprC: new Float32Array(64 * 4) };
+  }
+  function stopTrail() { trail = null; }
+  function trailUpdate(dt) {
+    if (!trail) return;
+    trail.t += dt;
+    const T = trail, t = T.t, head = U.smooth(0.2, 2.2, t), fade = 1 - U.smooth(5.5, 7.5, t), her = AG.Flight.pos, tre = AG.Reactivity.drive.treble;
+    if (fade <= 0) { trail = null; return; }
+    T.spr.fill(0); T.sprC.fill(0);
+    for (let i = 0; i < TRAIL_N; i++) {
+      const u = i / (TRAIL_N - 1);
+      if (u > head) break;
+      const q = V3.add(V3.add(T.from, V3.scale(T.dir, 6 + u * T.L)), [0, Math.sin(Math.PI * u) * 6 + u * T.rise, 0]);
+      const near = U.smooth(4, 12, V3.len(V3.sub(q, her)));
+      const tip = Math.exp(-Math.pow((head - u) * 9, 2)), shimmer = 0.55 + 0.45 * Math.sin(u * 26 - t * 6);
+      const a = (0.45 + 0.5 * shimmer * (1 + 0.6 * tre) + 0.8 * tip) * fade * near * (1 - 0.4 * u);
+      const c = V3.lerp(T.colA, T.colB, u);
+      T.spr.set([q[0], q[1], q[2], (2.0 + 1.4 * tip) * (1 + 0.6 * u)], i * 4);   // (larger further on: it stays a line at a distance)
+      T.sprC.set([c[0], c[1], c[2], a], i * 4);
+    }
+  }
+
   function update(dt) {
     for (const s of AG.Gardens.sites) updateSite(s, dt);
+    trailUpdate(AG.FSM.playing && !AG.Garden.drawsScene() ? dt : 0);
     const a = AG.Garden.site;
     L.built = a ? a.living : null;
   }
@@ -182,7 +260,7 @@ AG.Living = (function () {
     sh.wall.setUniform('uStage', [S.A, S.B, S.C, S.D]); sh.wall.setUniform('uE', S.E); sh.wall.setUniform('uBreath', lk.breath);
     sh.wall.setUniform('uWin', site.windows); sh.wall.setUniform('uReach', set.reach); sh.wall.setUniform('uHeight', set.H);
     sh.wall.setUniform('uInterior', 0); sh.wall.setUniform('uOrigin', set.origin); sh.wall.setUniform('uGrid', set.grid); sh.wall.setUniform('uFade', 1);
-    sh.wall.setUniform('uWinA', lk.winA); sh.wall.setUniform('uWinB', lk.winB);
+    sh.wall.setUniform('uWinA', lk.winA); sh.wall.setUniform('uWinB', lk.winB); sh.wall.setUniform('uWave', site.living.wave || [0, 0]);
     const pc = site.cfg.portal; sh.wall.setUniform('uPalA', pc.a); sh.wall.setUniform('uPalB', pc.b); sh.wall.setUniform('uPalGold', pc.gold); sh.wall.setUniform('uPalCool', pc.cool);
     set.walls.forEach((g) => p.model(g));
     // STAGE C: the vines climbing the facade, with their leaves
@@ -199,11 +277,13 @@ AG.Living = (function () {
       if (sc && (s.stage.C > 0.001 || s.stage.D > 0.001)) sc.drawSprites(s.living.spr, s.living.sprC, vw, s.living.roof.t);
       p.blendMode(p.BLEND);
       if (s.stage.D > 0.001 && sc) sc.drawFlowerBody(s.living.roof, vw);
+      if (sc && s.living.sparks) { gl.enable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.ADD); sc.drawSprites(s.living.sparkSpr, s.living.sparkSprC, vw, s.living.roof.t); }
       gl.enable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.BLEND);
     }
+    if (trail && sc && trail.t > 0) { gl.enable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.ADD); sc.drawSprites(trail.spr, trail.sprC, vw, trail.t); p.blendMode(p.BLEND); }
   }
 
-  function reset() { for (const s of AG.Gardens.sites) if (s.living) release(s); L.built = null; }
+  function reset() { for (const s of AG.Gardens.sites) if (s.living) release(s); L.built = null; trail = null; }
 
-  return Object.assign(L, { init, update, drawCity, reset, release, look, built: null });
+  return Object.assign(L, { init, update, drawCity, reset, release, look, startTrail, stopTrail, trailState: () => trail, built: null });
 })();

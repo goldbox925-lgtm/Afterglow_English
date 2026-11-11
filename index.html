@@ -7,7 +7,7 @@
   <meta name="description" content="An interactive story about a broken heart, a city restored, and rebirth.">
   <meta name="theme-color" content="#05060c">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2305060c'/%3E%3Crect x='7' y='9' width='5' height='17' fill='%23ff2a9e'/%3E%3Crect x='14' y='4' width='5' height='22' fill='%2322e8ff'/%3E%3Crect x='21' y='12' width='4' height='14' fill='%238b45ff'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css?v=r2k1">
+  <link rel="stylesheet" href="css/style.css?v=r2x4">
 </head>
 <body>
   <div id="stage"></div>
@@ -151,13 +151,20 @@
   <section id="gardenUI" aria-live="polite">
     <div id="gardenPanel">
       <p class="g-title">THE MEMORY GARDEN</p>
-      <p class="g-text"><b>Click</b> the heart of the flower to awaken it · <b>drag outward</b> to unfold it · drag elsewhere to look around · <b>← →</b> fly round the flower · <b>↑ ↓</b> height</p>
+      <p class="g-text"><b>Click</b> the heart of the flower to awaken it · <b>drag outward</b> to unfold it · drag elsewhere to look around · <b>← →</b> fly round the flower · <b>tap ↑</b> to rise · <b>↓</b> lower</p>
     </div>
     <div id="gardenButtons"><button id="gardenReset" type="button">CLOSE THE BUD</button><button id="gardenBack" type="button">BACK TO THE CITY</button></div>
-    <div id="gardenMeter"><span id="gardenStage">Closed bud</span> · <span id="gardenPct">0%</span><div class="track"><div id="gardenBar"></div></div></div>
   </section>
 
-  <div id="cityBloom" aria-live="polite">City Bloom — <b id="cityBloomN">0</b> / <span id="cityBloomT">5</span></div>
+  <!-- Round 02 progress (js/garden/r2Hud.js): read-only, never takes the pointer -->
+  <aside id="r2Hud" aria-label="Round 02 progress">
+    <div id="cityBloom" aria-live="polite">City Bloom: <b id="cityBloomN">0</b> / <span id="cityBloomT">5</span></div>
+    <div id="r2SiteRow" hidden><i aria-hidden="true"></i><b id="r2Site"></b><span id="r2SiteNote"></span></div>
+    <div id="r2BloomRow" class="r2-row" hidden><span>Bloom</span><div id="r2BloomBar" class="r2-bar" role="progressbar" aria-label="Flower bloom" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="r2BloomFill"></i></div><span id="r2BloomPct" class="r2-pct">0%</span></div>
+    <div id="r2FormRow" class="r2-row" hidden><span>Transform</span><div id="r2FormBar" class="r2-bar" role="progressbar" aria-label="Building transformation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="r2FormFill"></i></div><span id="r2FormPct" class="r2-pct">0%</span></div>
+    <div id="r2Stage" hidden></div>
+  </aside>
+  <p id="r2Line" role="status" aria-live="polite"></p>
 
   <noscript><p class="nojs">AFTERGLOW needs JavaScript and WebGL 2.</p></noscript>
 
@@ -183,33 +190,34 @@
   <script src="js/core/restoration.js?v=20261022asc"></script>
   <script src="js/core/collision.js?v=20261111c2"></script>
   <script src="js/core/fragments.js?v=20261110p7"></script>
-  <script src="js/core/flight.js?v=r2c4"></script>
+  <script src="js/core/flight.js?v=r2x4"></script>
   <script src="js/character/characterDirector.js?v=r2c1"></script>
   <script src="js/fx/screenWords.js?v=20261110b1"></script>
   <script src="js/fx/lightParticles.js?v=20261110t10"></script>
   <script src="js/core/interactions.js?v=20261110phase3f"></script>
   <script src="js/core/story.js?v=r2g1"></script>
-  <script src="js/core/camera.js?v=20261111c1"></script>
+  <script src="js/core/camera.js?v=r2x4"></script>
   <script src="js/audio/mic.js?v=20261110react2"></script>
   <script src="js/audio/score.js?v=20261022asc"></script>
   <script src="js/audio/audio.js?v=20261110p4hud"></script>
   <script src="js/audio/reactivity.js?v=20261110react6"></script>
-  <script src="js/shaders/atrium.glsl.js?v=r2k1"></script>
-  <script src="js/shaders/living.glsl.js?v=r2k1"></script>
+  <script src="js/shaders/atrium.glsl.js?v=r2x4"></script>
+  <script src="js/shaders/living.glsl.js?v=r2x4"></script>
   <script src="js/shaders/portal.glsl.js?v=r2k1"></script>
   <script src="js/shaders/flower.glsl.js?v=r2k1"></script>
   <script src="js/garden/flower.js?v=r2k1"></script>
-  <script src="js/garden/gardenScene.js?v=r2k1"></script>
+  <script src="js/garden/gardenScene.js?v=r2x4"></script>
   <script src="js/garden/r2Layer.js?v=r2k2"></script>
-  <script src="js/garden/gardens.js?v=r2k3"></script>
+  <script src="js/garden/gardens.js?v=r2x4"></script>
   <script src="js/garden/botanical.js?v=r2k1"></script>
-  <script src="js/garden/atrium.js?v=r2k1"></script>
-  <script src="js/garden/garden.js?v=r2k3"></script>
+  <script src="js/garden/atrium.js?v=r2x4"></script>
+  <script src="js/garden/garden.js?v=r2x4"></script>
   <script src="js/garden/vines.js?v=r2h1"></script>
-  <script src="js/garden/living.js?v=r2k1"></script>
-  <script src="js/garden/round2.js?v=r2k1"></script>
-  <script src="js/render/renderer.js?v=r2k1"></script>
-  <script src="js/ui/ui.js?v=r2k2"></script>
-  <script src="js/sketch.js?v=r2k1"></script>
+  <script src="js/garden/living.js?v=r2x4"></script>
+  <script src="js/garden/round2.js?v=r2x4"></script>
+  <script src="js/garden/r2Hud.js?v=r2x4"></script>
+  <script src="js/render/renderer.js?v=r2n1"></script>
+  <script src="js/ui/ui.js?v=r2x4"></script>
+  <script src="js/sketch.js?v=r2n1"></script>
 </body>
 </html>

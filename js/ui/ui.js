@@ -71,6 +71,9 @@ AG.UI = (function () {
       && !AG.FSM.cinematic && !AG.Flight.finale && FR.collected < FR.list.length && !body.classList.contains('garden'));
     const text = garden ? AG.Garden.goalText() : 'COLLECT ALL FIVE FRAGMENTS';
     if (g.textContent !== text) g.textContent = text;
+    // Round 02: the objective in the next building's colour (a dot before it, CSS)
+    const gc = garden ? AG.Garden.goalColor() : '';
+    if (g.dataset.gc !== gc) { g.dataset.gc = gc; g.style.setProperty('--gc', gc || 'transparent'); g.classList.toggle('next', !!gc); }
     g.classList.toggle('show', show);
     if (!show) return;
     const panel = $('stagePanel'), barBottom = $('brand').getBoundingClientRect().bottom;
@@ -96,7 +99,7 @@ AG.UI = (function () {
   function updateFlightPad(st) {
     const pad = $('flightPad'), F = AG.FSM;
     const show = st === 'AFTERGLOW' && document.body.classList.contains('entered') && !F.cinematic && !AG.Flight.finale && F.playing && isTouch()
-      && !(AG.Garden && AG.Garden.isActive() && AG.Garden.phase !== 'approach');      // not inside the garden
+      && !(AG.Garden && AG.Garden.isActive() && AG.Garden.phase !== 'approach' && AG.Garden.phase !== 'launch');      // not inside the garden (but on the flight out)
 
     if (show === pad.classList.contains('show')) return;
     pad.classList.toggle('show', show);
@@ -210,6 +213,8 @@ AG.UI = (function () {
     if (F.cinematic) return { title: 'WATCH THE SCENE', text: "You'll be able to interact soon." };
     const def = C.states.find((s) => s.id === st);
     if (st === 'AFTERGLOW' && AG.Garden && AG.Garden.isActive()) {
+      const hint = AG.Garden.hintText();                               // the flight out of a transformed building
+      if (hint) return { title: 'FLY ON', text: hint, keep: true };
       if (AG.Gardens.allComplete()) return null;                       // free flight: nothing left to ask of her
       return AG.Garden.phase === 'approach' ? { title: 'THE MEMORY GARDEN', text: 'A doorway of light has opened. Fly through it · ← → steer · tap ↑ to rise · ↓ to descend.' } : null;
     }
@@ -249,7 +254,7 @@ AG.UI = (function () {
     const key = pr ? pr.title + pr.text : '';
     if (panel.dataset.key !== key) { panel.dataset.key = key; if (pr) { $('stageTitle').textContent = pr.title; $('stageText').textContent = pr.text; } stateShownAt = performance.now(); }
     panel.classList.toggle('show', !!pr);
-    panel.classList.toggle('compact', !!pr && st === 'AFTERGLOW' && (performance.now() - stateShownAt) > 7000);
+    panel.classList.toggle('compact', !!pr && !pr.keep && st === 'AFTERGLOW' && (performance.now() - stateShownAt) > 7000);
     let done = 0, total = 0;
     if (st === 'FRACTURE') { done = IA.stabilised; total = IA.need.fragile; }
     else if (st === 'AWAKENING') { done = IA.awakeningConnections; total = IA.need.awakening; }

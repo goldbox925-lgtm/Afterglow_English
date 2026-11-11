@@ -545,8 +545,8 @@ AG.Renderer = (function () {
     const aspect = p.width / p.height;
     const F = { t, at: at !== undefined ? at : t, cam, hero: [hero.fig.x, hero.fig.y, hero.fig.z] };
     F.spots = AG.Restoration.uniforms(F.at);
-    // Round 02's finale: the five buildings' colours in the city's sky glow (nothing before all five complete)
-    const FN = AG.Gardens && AG.Gardens.finaleLook(F.at);
+    // Round 02: the finished buildings' colours in the city's sky glow, a share each (nothing before the first)
+    const FN = AG.Gardens && AG.Gardens.awakeningLook(F.at);
     if (FN) S = Object.assign({}, S, { cityGlow: S.cityGlow.map((v, i) => v + FN.col[i] * FN.k * 0.32), horizon: S.horizon.map((v, i) => v + FN.col[i] * FN.k * 0.1) });
     if (CH && CH.flash > 0.02) S = Object.assign({}, S, { exposure: S.exposure + CH.flash * 0.6 });
     // near-field lights: fallen sign, door, the city's returning warmth, lightning

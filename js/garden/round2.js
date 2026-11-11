@@ -15,7 +15,8 @@
      DRAG       the player is dragging it open
      BLOOM      partly open, between drags
      TRANSFORM  fully open (100 %): the transformation's moment
-     EXIT       fading out of the garden
+     EXIT       leaving the garden: Back to the city (a fade), or the flight
+                out through the opened glass after the transformation
      EXPLORE    back in the city after a visit
    A change emits U 'r2phase' { phase, prev }.
 
@@ -39,6 +40,7 @@ AG.R2 = (function () {
     stage: { A: 0, B: 0, C: 0, D: 0, E: 0 },   // stage progress of the site she is at, each 0..1, overlapping
     flowerPos: [0, 0, 0], buildingPos: [0, 0, 0]
   };
+  const BLOOM_DONE = 0.995;   // the flower counts as fully open from here (the HUD shows 100 % from the same value)
   const DURATION = 42;        // seconds for the whole transformation at the flower's normal glow
   let p = null;
   function init(inst) { p = inst; }
@@ -46,12 +48,12 @@ AG.R2 = (function () {
   function derive() {
     const G = AG.Garden;
     if (!G || !G.isActive()) return 'OFF';
-    if (G.phase === 'leave') return 'EXIT';
+    if (G.phase === 'leave' || G.phase === 'launch') return 'EXIT';      // (launch: the flight out after a transformation)
     if (G.phase === 'approach') return G.visits > 0 ? 'EXPLORE' : 'ENTER';
     if (G.phase === 'enter') return 'ENTER';
     const f = G.scene && G.scene.flower;                     // inside
     if (!f || !f.awake) return 'APPROACH';
-    if (f.bloom >= 0.995) return 'TRANSFORM';
+    if (f.bloom >= BLOOM_DONE) return 'TRANSFORM';
     if (f.dragging) return 'DRAG';
     if (f.target > 0.01) return 'BLOOM';
     return 'AWAKEN';
@@ -64,7 +66,7 @@ AG.R2 = (function () {
     const G = AG.Garden, f = G && G.scene ? G.scene.flower : null, here = G ? G.site : null, Gs = AG.Gardens;
     R.bloom = f ? f.bloom : 0; R.awake = !!(f && f.awake); R.dragging = !!(f && f.dragging);
     R.visits = G ? G.visits : 0;
-    if (here && R.bloom >= 0.995) here.bloomed = true;
+    if (here && R.bloom >= BLOOM_DONE) here.bloomed = true;
     if (f) { R.glow = f.core; R.particles = f.motes.length; R.flowerPos = f.center; }
     if (G && G.portal) R.buildingPos = [G.portal.box.cx, G.portal.box.top - 6, G.portal.box.cz];
     for (const s of Gs.sites) transformStep(s, dt, s === here);
@@ -102,5 +104,5 @@ AG.R2 = (function () {
   }
 
   AG.U.on('reset', reset); AG.U.on('replay', reset);   // Play again / R / a backward stage jump
-  return Object.assign(R, { PHASES, init, update, reset, derive });
+  return Object.assign(R, { PHASES, BLOOM_DONE, init, update, reset, derive });
 })();

@@ -319,8 +319,9 @@ flight controller, poses and character drawing.
   - a keep-out sphere round the flower (`dot` / `sub`, so she never passes through it).
 - **Measured.** She settles on the ring with **no overshoot**, arriving in 2.9 s at 10, 30 and
   60 fps alike (identical paths).
-- **Keys and mouse.** ← → move her round the flower and ↑ ↓ change her height (the existing key
-  handlers). The mouse never steers her in the garden.
+- **Keys and mouse.** ← → fly her round the flower and ↑ changes her height, with the city's
+  key handlers and tap detection (see *Flight controls* below). The mouse never steers her in the
+  garden.
 - **Poses.** `CharacterDirector` uses the same images: `G` (flying, back view) while she flies
   in, cross-faded to `E` (levitating) once she has arrived.
 - **Drawing.** `AG.Renderer.drawCharacterWith()` lets the garden scene draw her with the city's
@@ -363,6 +364,7 @@ flight controller, poses and character drawing.
 | **3 (done)** | The heroine in the garden; APPROACH by pointing (`mouseMoved` / `mousePressed` → arrive steering, `p5.Vector`); proximity → glow, petal response, motes drifting toward her | Her distance to the flower changes the glow (measured). She stops smoothly (no overshoot) at 10, 30 and 60 fps. Drag still works. |
 | **4 (done)** | TRANSFORM: at 100 %, `AG.Vines` (noise-guided `p5.Vector` walkers, seeded `p.random`, beziers, `lerpColor`, `millis`) grows light vines in the garden (p5 layer) and across the doorway building's facade (renderer pass); EXIT → EXPLORE shows the transformed building in the city | The growth starts only after 100 %, is deterministic per city, keeps 60 fps on the balanced tier, and persists when she flies around the building. Round 01 is unchanged. |
 | **6 (done)** | Five living buildings on one system: `AG.Gardens` configurations and site records; one flower scene whose state and palette are swapped per building; one atrium whose plants and city view are rebuilt per building; a facade and rooftop flower per completed building; the "City Bloom" counter; the finale | All five can be entered and use their own palette. The shared bloom works in each. Rooftop flowers stand on the right buildings. Finished states persist across switches. Round 01 and direct R02 still work. No added listeners or render loops. |
+| **6b (done)** | Progress HUD (City Bloom from completed buildings, the building, bloom and transform bars from the real values) and short narrative lines at arrival, first drag, completion and leaving; each completed building adds to the sky glow and keeps a column of light | The counter starts at 0 / 5 and rises once per completed building. Bars match the real values and reach 100 % only when done. Progress persists across switches. Lines appear at their moments, hold while paused, clear on Replay, and never take the pointer. The HUD fits desktop and phone widths. Round 01 shows none of it. |
 
 Each phase ends with screenshots, an interaction test, a Round 01 check and an honest report of
 what was not verified.
@@ -387,6 +389,162 @@ well apart. All five prefer roofs with a helipad or lattice crown, so that no ma
 through the flower; other roofs are used only if a city has too few. The city generator now
 records `crownKind` on each building; this draws no random numbers, so the city is unchanged.
 
-*Progress.* "City Bloom — n / 5" counts bloomed buildings and is visible only in Round 02. When
-all five are complete, `finaleLook()` moves the sky glow through the five palettes with
-`p.lerpColor`. Free flight continues.
+*Progress.* The progress HUD and the finale are described in the next section.
+
+**City progress and narrative (as built).**
+
+*The HUD (`js/garden/r2Hud.js`, `#r2Hud` in `index.html`).* It reads the game's state once per
+frame, after `AG.R2.update`, and writes the page only when a value changes. It has no progress
+value of its own:
+
+| Shows | Read from |
+|---|---|
+| City Bloom: n / 5 | `AG.Gardens.completedCount()`: a building counts once its transformation is complete |
+| Building name and colour | the site in focus: the one she is in; in flight, the one still transforming behind her, else the doorway she is lining up with |
+| Bloom bar | `AG.Garden.siteBloom(site)`: the live flower for the site the scene holds, the saved one otherwise |
+| Transform bar | `site.transform` |
+| Stage caption (inside, wide screens) | the flower's `stageName()`, then the transformation stage |
+
+- Both bars show 100 % only when the game says done (`AG.R2.BLOOM_DONE`, `transform >= 1`); below
+  that they round down, so they never reach 100 % early.
+- The bars are `role="progressbar"` with `aria-valuenow`. The HUD has `pointer-events: none`, so a
+  click or drag over it reaches the canvas and cannot change a value.
+- In flight, only values in progress are shown. When all five are complete, only the counter stays.
+- The HUD is visible only with `body.garden` (Round 02). The old bottom meter is removed; its stage
+  text moved into the HUD.
+- Layout: top-right on wide screens. Up to 1240 px the instructions panel moves left, under the
+  brand. At phone width the HUD is a full-width strip, at the top inside and above the controls in
+  flight.
+
+*Narrative.* A short line fades in and out at the bottom centre at four moments: arriving in a
+building, the first drag of its flower, its transformation completing (wherever she is), and
+leaving a bloomed building while others still wait. The line is picked from the real counts of
+bloomed and completed buildings, so the wording moves from her strength, to the city waking, to
+the city made beautiful. Claims such as "One bud left" are only made when true. The full central
+sentence appears once, when the fifth building completes. Each site stores which moments it has
+told (`site.told`), so a moment is never repeated for the same building. Lines run on the game
+clock: pause holds them, Replay clears them. They never take the pointer.
+
+*The city's awakening.* Each completed building adds a share of the sky glow
+(`AG.Gardens.awakeningLook()`, `p.lerpColor` round the finished buildings' colours); with all five
+complete this equals the earlier finale. A finished building also keeps a thin column of light in
+its colour over its roof, using the existing portal beacon, which swells once the first time she
+is out in the city to see it.
+
+**Flight controls (as built).** Round 02 uses the city's flight (`AG.Flight`, `js/core/flight.js`).
+There is no separate movement system: the same key handlers, the same ↑ tap / double-tap detection
+(`press()`), the same speed, acceleration, turn rate and turn tightening.
+
+*Between buildings (approach / explore).* The controls are the city's:
+
+| Input | Result |
+|---|---|
+| ← / → | turn left / right (each tested on its own) |
+| ↑ tap | a lift of about 15 m |
+| ↑ ↑ double-tap (within 0.4 s) | the stronger lift, about 45 m; one tap never triggers it |
+| ↑ hold | speeds her up (21 → 30 m/s), as in the city |
+| ↓ hold | descends, and cancels a lift still pending |
+| mouse x | turns her, as in the city |
+
+The doorway assists (`F.assistTurn`, `F.assistVy`, set in `js/garden/garden.js`) now yield to the
+player:
+- The turn assist fades out while an arrow is held and returns about 1–2 s after release.
+- The height assist pauses while ↑ or ↓ is used or a lift is still running, and returns about
+  1.5–3 s later. A tap of ↑ now climbs even when she is lined up with a doorway. Before, the height
+  assist pulled her back down, and within 110 m (`assistHold`) it cancelled the lift altogether.
+- After a click on R02 or "Back to the city", the pointer is usually resting on the button, off
+  centre. It is "parked" (`F.mouseParked`) and does not steer her until it moves 24 px. Before, it
+  turned her on its own and could cancel ←.
+- While Round 02 runs, a held arrow key wins over the mouse (`F.keysFirst`).
+
+All of these are 0, false or null in Round 01, so its flight is unchanged.
+
+*In the garden (garden mode).*
+- ← / → fly her round the flower at 8.5 m/s (the city's turn tightening included) and back to the
+  slow cruise when released. ← always carries her to the left of the view and → to the right: the
+  ring direction is chosen from the camera's right vector (`g.camRight`).
+- She faces the way she flies: the yaw follows her velocity quickly while she moves fast.
+- ↑ tap and double-tap give the city's lifts at room scale (× 0.1, about 1.5 m and about 4.5 m),
+  eased. ↑ hold climbs steadily, ↓ hold descends, and the height range is 0.9–8.5 m.
+- Released, she settles back on the ring beside the flower and returns to her levitating pose.
+- The mouse still belongs to the flower and the camera. A click or drag on the flower never
+  starts flight, and a drag works with an arrow held.
+
+All of this is frame-rate independent (exponential easing on `dt`, sub-steps ≤ 1/120 s), and
+nothing sets her position directly.
+
+**Flight out, rooftop reveal and next target (as built)** (`js/garden/garden.js`,
+`js/core/flight.js`, `js/garden/atrium.js`, `js/shaders/atrium.glsl.js`, `js/garden/living.js`,
+`js/shaders/living.glsl.js`, `js/core/camera.js`, `js/ui/ui.js`).
+
+*When it runs.* A site completes (transform 100 %) while she is inside: `site.exitSeq` becomes
+`'pending'` and the garden moves to the new phase `launch`. If it completes while she is outside
+(or after "Back to the city"), `exitSeq` is `'skip'`: there is no flight out, and going back in later
+does not replay it. Each site keeps its own progress.
+
+*Timeline (game seconds from the start of `launch`).*
+
+| t | What happens |
+|---|---|
+| 0 – 2.2 | The final light: a bright band rises through the atrium's glass and metal (`uFinal`). |
+| 1.2 – 2.4 | The glass panel on the doorway's side dissolves open with a glowing edge (`uOpen`, `discard`), about ±20° wide, between the floor band and the first walkway. |
+| 2.0 | She takes off (`F.garden.launch`): an assisted course to the opening and straight on, at the city cruise speed with the city acceleration. |
+| about 3 – 5 | Past the glass and through the building's facade: a short light flash, then she is in the city. |
+
+*Controls during the launch.* ← / → shift her across the opening (7 m/s, in screen terms through
+`camRight`). Taps and double-taps of ↑ lift her within the opening (× 0.12). Held ↑ / ↓ climb or
+descend, kept inside the opening. The aim goes round the flower if it is in the way. Everything
+works on `dt` (sub-steps ≤ 1/120 s). Full city control returns as soon as she is outside. The pad
+(← → ↑ ↓) is shown during the launch on touch screens. The mouse is not used for flight, so it
+cannot interfere with the flower.
+
+*The hand-off (no teleport).* The garden's axes are the city's. Its origin is
+`O = [box.cx, doorway.y − doorway.h/2 + 1, box.cz]`, the same offset `atrium.js` uses, so
+`world = garden + O`. The hand-off keeps her position, velocity (`F.setVel`) and any lift still
+being eased (`F.carryLift`). The scene change (atrium image → city image) is covered by a short
+white flash (0.5).
+
+*Rooftop reveal.* A 4 s camera pose from `AG.Garden.cameraPose()`. It is a side shot because the
+flying character only has a back view. It frames her and the rooftop flower together, pulling back
+to fit both (at most 75 m in landscape and 150 m in portrait). It carries the camera with her
+(`anchor`) so she stays in frame at full speed. Next, the chase camera eases back. For about 3 s its
+look is gently drawn toward the next target's beacon, unless the beacon is behind her. The camera
+never steers her, and the player keeps control throughout. `snapLook` in `camera.js` is opt-in, so
+Round 01's cuts are unchanged.
+
+*Next target.*
+- `G.targetSite` is the nearest building that has not yet bloomed: measured from her position in
+  the city, or from the current building after it completes.
+- It changes only when the current target completes, or when she flies into another building.
+  Buildings that bloomed but are still transforming are skipped.
+- The target's beacon is the brightest and widest; other unfinished buildings get a dimmer one.
+- The edge arrow points to the target's doorway while it is off screen.
+- The HUD pill reads "NEXT: AZURE · 420 m", with a live 3D distance in steps of 10 m and a dot in
+  the building's colour. It reads "AZURE · TRANSFORMING 6%" while the target has bloomed but is
+  still transforming, and "THE CITY IS IN BLOOM" when all five are complete.
+- The story line after a flight out is "One light has returned. Another is waiting."
+- The hint "Double-tap ↑ to rise. Use ← → to steer." is shown during the launch and the reveal.
+
+*Audio-reactive awakening* (outside the building only, for 9 s after completion).
+- **Wave** (`uWave` in `livingWall`): a band of light rises up the facade, brightening the
+  structure lines and windows in the building's palette. Its strength follows
+  `Reactivity.drive.mid`.
+- **Sparkles:** 2–4 at a time on a rising musical accent (`Reactivity.accent` above 0.42, at least
+  0.24 s apart), on the facade or around the rooftop flower. There are at most 16 per building and
+  each lasts 0.7 s.
+- **Trail:** 48 light sprites from the building toward the next beacon (up to 160 m, pink → gold
+  in the building's palette). It grows over 2 s and fades out at 5.5–7.5 s, and its shimmer follows
+  the treble.
+- Everything uses the existing analysis (`AG.Reactivity`), which already includes the AUDIO
+  REACTIVITY ON/OFF fade. With reactivity OFF the wave plays at a steady base strength, the trail
+  does not shimmer, and there are no sparkles. There is no microphone and no new audio source.
+
+*Fallback.* "Back to the city" still works at every point inside, including before completion. If
+she leaves early, the flight out is skipped (`'skip'`) and the target stays the same building until
+it completes.
+
+*Limitations.*
+- The reveal is a side shot (no front-facing flying pose), and she is small at its widest moment.
+- The atrium scene and the city scene are separate images, so the change between them is covered by
+  a flash. Her position and speed are continuous.
+- The audio-reactive parts were tested with synthetic levels, not real music.

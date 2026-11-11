@@ -100,6 +100,8 @@ body.entered #hud { opacity: 1; }
   text-shadow: 0 0 10px rgba(255, 120, 200, 0.55), 0 0 2px rgba(0, 0, 0, 0.6); opacity: 0; transition: opacity 0.6s;
 }
 #fragGoal.show { opacity: 1; }
+/* Round 02: the next target, with a dot in its building's colour (js/ui/ui.js sets --gc) */
+#fragGoal.next::before { content: ''; display: inline-block; width: 8px; height: 8px; margin: 0 9px 1px 0; border-radius: 50%; vertical-align: middle; background: var(--gc); box-shadow: 0 0 8px var(--gc); }
 @media (max-width: 860px) { #fragGoal { font-size: 11px; letter-spacing: 0.2em; padding: 4px 11px; } }
 #fragHud {
   position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%) translateY(6px); z-index: 11; pointer-events: none;
@@ -336,18 +338,53 @@ body.entered:not(.flying) #stage canvas { cursor: crosshair; }
 #gardenButtons button { font: inherit; font-size: 11px; letter-spacing: 0.14em; color: #f3e9ff; background: rgba(20, 10, 32, 0.55); cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 14px; padding: 8px 13px; }
 #gardenButtons button:hover { border-color: rgba(255, 122, 208, 0.8); }
-#gardenMeter { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); width: min(320px, calc(100vw - 32px)); text-align: center; font-size: 12px; letter-spacing: 0.18em; color: #f3e9ff; }
-#gardenMeter .track { height: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); margin-top: 6px; overflow: hidden; }
-#gardenBar { height: 100%; width: 0; background: linear-gradient(90deg, #9f87ff, #ff7ad0, #ffc56e); }
 @media (max-width: 860px) {
-  #gardenButtons { left: 16px; right: 16px; bottom: 130px; justify-content: center; }
-  #gardenMeter { bottom: 84px; }
+  #gardenButtons { left: 16px; right: 16px; bottom: 84px; justify-content: center; }
 }
 .chip.r2 { margin-left: 6px; border-style: dashed; }
 .chip.r2.active { border-style: solid; color: #fff; border-color: var(--magenta); box-shadow: 0 0 10px rgba(255, 42, 158, 0.35); }
 
-/* Round 02 · how many of the five buildings have bloomed */
-#cityBloom { position: fixed; right: 18px; top: 18px; z-index: 14; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(243, 233, 255, 0.82);
-  padding: 5px 11px; border-radius: 12px; background: rgba(20, 10, 32, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); opacity: 0; transition: opacity 0.8s; pointer-events: none; }
+/* Round 02 · progress (js/garden/r2Hud.js). Read-only: it never takes the pointer. Round 02 only. */
+#r2Hud { --r2a: #ff7ad0; --r2b: #ffc56e; position: fixed; right: 18px; top: 18px; z-index: 14; width: 214px; box-sizing: border-box; padding: 8px 12px; border-radius: 12px;
+  font-size: 11px; letter-spacing: 0.08em; color: rgba(243, 233, 255, 0.86); background: rgba(20, 10, 32, 0.42); border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0; visibility: hidden; transition: opacity 0.8s, visibility 0.8s; pointer-events: none; user-select: none; -webkit-user-select: none; }
+body.garden #r2Hud { opacity: 1; visibility: visible; }
+#r2Hud [hidden] { display: none; }
+#cityBloom { letter-spacing: 0.18em; text-transform: uppercase; }
 #cityBloom b { font-weight: 600; color: #fff; }
-body.garden #cityBloom { opacity: 1; }
+#r2SiteRow { display: flex; align-items: center; gap: 7px; margin-top: 6px; }
+#r2SiteRow i { width: 9px; height: 9px; flex: none; border-radius: 50%; background: linear-gradient(135deg, var(--r2a), var(--r2b)); }
+#r2SiteRow b { font-weight: 600; color: #fff; letter-spacing: 0.12em; }
+#r2SiteNote { margin-left: auto; font-size: 10px; color: rgba(243, 233, 255, 0.66); }
+.r2-row { display: flex; align-items: center; gap: 7px; margin-top: 5px; font-size: 10px; }
+.r2-row > span:first-child { width: 58px; flex: none; }
+.r2-bar { flex: 1; min-width: 0; height: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.r2-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--r2a), var(--r2b)); }
+.r2-pct { width: 30px; flex: none; text-align: right; font-variant-numeric: tabular-nums; color: #fff; }
+#r2Stage { margin-top: 5px; font-size: 10px; color: rgba(243, 233, 255, 0.66); }
+#r2Line { position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); z-index: 14; margin: 0; width: max-content; max-width: min(620px, calc(100vw - 32px)); box-sizing: border-box; text-align: center;
+  font-size: 16px; font-style: italic; line-height: 1.4; letter-spacing: 0.03em; color: #fff; text-shadow: 0 0 12px rgba(20, 8, 34, 0.95), 0 1px 3px rgba(20, 8, 34, 0.9); opacity: 0; pointer-events: none; }
+/* the instructions make room for the HUD before they would run under it */
+@media (max-width: 1240px) {
+  #gardenPanel { left: 16px; top: 46px; transform: none; max-width: calc(100vw - 264px); text-align: left; }
+  #r2Line { bottom: 128px; }
+}
+@media (max-width: 860px) {
+  #r2Line { bottom: 132px; font-size: 14px; }
+}
+/* phone width: one strip under the brand, two short bars side by side, no stage caption */
+@media (max-width: 640px) {
+  #r2Hud { left: 8px; right: 8px; top: 44px; width: auto; display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-items: center; padding: 6px 10px; }
+  #cityBloom { letter-spacing: 0.1em; font-size: 10px; }
+  #r2SiteRow { margin-top: 0; justify-self: end; }
+  .r2-row { margin-top: 5px; }
+  .r2-row > span:first-child { width: 60px; }
+  #r2BloomRow, #r2FormRow { grid-column: 1 / -1; }
+  #r2Stage { display: none; }
+  /* in flight the goal and the hint own the top of a phone: the HUD waits above the controls */
+  body.garden:not(.garden-inside) #r2Hud { top: auto; bottom: 72px; }
+  body.garden:not(.garden-inside) #r2Line { bottom: 150px; }
+  #gardenPanel { left: 8px; right: 8px; top: 100px; width: auto; max-width: none; padding: 6px 10px; }
+  #gardenPanel .g-title { display: none; }
+  #gardenPanel .g-text { font-size: 11px; line-height: 1.35; }
+}

@@ -46,6 +46,7 @@ out vec4 outColor;
 uniform vec4 uStage; uniform float uE, uBreath, uWin, uReach, uHeight, uInterior, uFade;
 uniform vec3 uOrigin; uniform vec2 uGrid;      // column spacing, storey height (metres)
 uniform vec3 uWinA, uWinB, uPalA, uPalB, uPalGold, uPalCool;                     // window colours, 0..1 RGB (p.lerpColor by transform, js/garden/living.js)
+uniform vec2 uWave;                            // the completion wave: (front height in metres, strength incl. the music); 0 = none
 void main(){
   vec2 m = vUv;
   float A = uStage.x, B = uStage.y, D = uStage.w;
@@ -92,6 +93,14 @@ void main(){
   // D: a pink-gold glow descending from the top of the walls
   float top = smoothstep(uHeight * (1.0 - 0.7 * D), uHeight, m.y) * D;
   c += mix(pink, gold, 0.4) * top * 0.35;
+  // THE COMPLETION WAVE: a band of the building's light travelling up the facade, through the
+  // structure lines and every window (lit or not), leaving a soft afterglow below it
+  if (uWave.y > 0.001){
+    float band = exp(-pow((m.y - uWave.x) / 3.5, 2.0)) * uWave.y;
+    float after = smoothstep(uWave.x - 22.0, uWave.x, m.y) * step(m.y, uWave.x) * uWave.y;
+    c += mix(pink, gold, 0.55) * (band * (0.7 + 1.8 * (colLine + slabLine)) + after * 0.08);
+    c += mix(winCol, gold, 0.3) * inWin * (band * 2.6 + after * 0.35);
+  }
   // outside, keep it to a delicate overlay; inside, the walls are the room
   c *= mix(0.75, 1.0, uInterior) * uBreath * uFade;
   outColor = vec4(c, 1.0);

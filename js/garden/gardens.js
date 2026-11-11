@@ -65,12 +65,14 @@ AG.Gardens = (function () {
       motion: { f: 0.7, h: 4.2 }, roof: 0.95 }
   ];
 
-  const G = { CONFIGS, sites: [], limit: CONFIGS.length, finale: 0 };
+  const G = { CONFIGS, sites: [], limit: CONFIGS.length, finale: 0, awake: 0 };
+  const SURGE_T = 9;      // game seconds of a finished building's column swelling
   let p = null, sky = null;
   const NOSTAGE = { A: 0, B: 0, C: 0, D: 0, E: 0 };
   function init(inst) { p = inst; }
 
   const freshFlower = () => ({ bloom: 0, target: 0, awake: false, awakeK: 0, full: false, clicks: 0 });
+  const freshTold = () => ({ arrive: false, begin: false, complete: false, leave: false });   // false, or the line index each story moment used (js/garden/r2Hud.js)
 
   /* a site from a chosen doorway (js/garden/garden.js) and its configuration */
   function makeSite(cfg, index, portal) {
@@ -80,7 +82,8 @@ AG.Gardens = (function () {
       index, id: cfg.id, name: cfg.name, cfg, portal,
       position: [b.cx, b.top, b.cz],
       seed: Math.floor(Math.abs(b.cx * 31.7 + b.cz * 11.3)) % 9973 + 3,
-      flower: freshFlower(),
+      flower: freshFlower(), told: freshTold(), surge: 0,
+      exitSeq: null,          // the flight out after its transformation (js/garden/garden.js): null, 'pending', 'done', 'skip'
       bloomed: false, completed: false, sinceBloom: 0, transform: 0, windows: 0,
       stage: { A: 0, B: 0, C: 0, D: 0, E: 0 },
       // the giant flower's base on the top shaft's real roof, sized to that roof
@@ -93,12 +96,12 @@ AG.Gardens = (function () {
   /* a new story: every building back to its bud. The chosen doorways stay. */
   function resetAll() {
     for (const s of G.sites) {
-      s.flower = freshFlower();
+      s.flower = freshFlower(); s.told = freshTold(); s.surge = 0; s.exitSeq = null;
       s.bloomed = false; s.completed = false; s.sinceBloom = 0; s.transform = 0; s.windows = 0;
       for (const k in s.stage) s.stage[k] = 0;
       if (AG.Living && s.living) AG.Living.release(s);
     }
-    G.finale = 0;
+    G.finale = 0; G.awake = 0;
   }
   function clear() { resetAll(); G.sites = []; }
 
@@ -106,21 +109,31 @@ AG.Gardens = (function () {
   const completedCount = () => G.sites.reduce((n, s) => n + (s.completed ? 1 : 0), 0);
   const allComplete = () => G.sites.length > 0 && completedCount() === G.sites.length;
 
-  /* the finale eases in once the last rooftop flower has fully opened (and stays) */
+  /* the city's awakening follows the finished buildings (a share each); the finale eases in once
+     the last rooftop flower has fully opened (and stays). Game time: pause holds both. */
   function update(dt) {
-    if (!p) return;
-    G.finale = p.lerp(G.finale, allComplete() ? 1 : 0, 1 - Math.exp(-dt / 2.4));
+    if (!p || !AG.FSM.playing) return;
+    const ease = 1 - Math.exp(-dt / 2.4), done = completedCount();
+    G.finale = p.lerp(G.finale, allComplete() ? 1 : 0, ease);
     if (G.finale < 1e-3) G.finale = 0;
+    G.awake = p.lerp(G.awake, G.sites.length ? done / G.sites.length : 0, ease);
+    if (G.awake < 1e-3) G.awake = 0;
+    // the column swells the first time she is out in the city to see it
+    if (AG.Garden.phase === 'approach') for (const s of G.sites) if (s.completed && s.surge < SURGE_T) s.surge = Math.min(SURGE_T, s.surge + dt);
   }
+  const surgeK = (s) => s.surge / SURGE_T;
 
-  /* the combined palettes for the sky: p.lerpColor round the five buildings' colours, slowly */
-  function finaleLook(t) {
-    if (!(G.finale > 0) || !G.sites.length) return null;
+  /* the sky takes on the colours of the buildings finished so far: p.lerpColor round them, slowly.
+     k grows with each one and is 1 when all five are done. */
+  function awakeningLook(t) {
+    if (!(G.awake > 0)) return null;
+    const lit = G.sites.filter((s) => s.completed);
+    if (!lit.length) return null;
     if (!sky) sky = CONFIGS.map((c) => p.color(c.city.a[0], c.city.a[1], c.city.a[2]));
-    const n = G.sites.length, x = ((t * 0.05) % 1) * n, i = Math.floor(x);
-    const c = p.lerpColor(sky[i % n], sky[(i + 1) % n], x - i);
-    return { k: G.finale, col: [p.red(c) / 255, p.green(c) / 255, p.blue(c) / 255] };
+    const n = lit.length, x = ((t * 0.05) % 1) * n, i = Math.floor(x);
+    const c = p.lerpColor(sky[lit[i % n].index], sky[lit[(i + 1) % n].index], x - i);
+    return { k: G.awake, col: [p.red(c) / 255, p.green(c) / 255, p.blue(c) / 255] };
   }
 
-  return Object.assign(G, { NOSTAGE, init, setSites, resetAll, clear, update, bloomedCount, completedCount, allComplete, finaleLook });
+  return Object.assign(G, { NOSTAGE, init, setSites, resetAll, clear, update, bloomedCount, completedCount, allComplete, surgeK, awakeningLook });
 })();
