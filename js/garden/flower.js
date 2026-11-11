@@ -48,7 +48,7 @@ AG.BloomFlower = (function () {
     const F = {
       center: o.center.slice(), scale: sc,
       bloom: 0, target: 0, awake: false, awakeK: 0, pulseT: 99, dragging: false,
-      grow: 0.94, growPulseT: 99, fullPulseT: 99, full: false, idleYaw: 0,   // p.scale() / p.rotate() inputs (gardenScene.js)
+      grow: 0.94, growPulseT: 99, fullPulseT: 99, full: false, idleYaw: 0, extScale: 1,   // extScale: an outside growth factor (the rooftop flower emerging)   // p.scale() / p.rotate() inputs (gardenScene.js)
       hover: false, hoverK: 0,                                               // the pointer over the golden centre (p.mouseMoved)
       visitor: null, proxTo: 0, prox: 0,                                     // Round 02: her position and closeness (setVisitor)
       petals: [], stamA: new Float32Array(STAMENS * 4), stamB: new Float32Array(STAMENS * 4),
@@ -161,7 +161,7 @@ AG.BloomFlower = (function () {
       if (!F.full && b >= 0.995) { F.full = true; F.fullPulseT = 0; }
       const env = (x, len) => (x < len ? p.sin(Math.PI * x / len) : 0);
       const growTo = p.map(b, 0, 1, 0.94, 1.0) * (1 + 0.05 * env(F.growPulseT, 0.7) + 0.08 * env(F.fullPulseT, 1.4) + 0.018 * p.sin(t * 1.3) * U.smooth(0.9, 1, b));
-      F.grow = p.lerp(F.grow, growTo, 1 - Math.exp(-12 * dt));
+      F.grow = p.lerp(F.grow, growTo * F.extScale, 1 - Math.exp(-12 * dt));
       // a slow organic turn of the whole flower about its axis (p.rotate, ±3.5°, p.noise)
       F.idleYaw = (p.noise(t * 0.08, 3.3) - 0.5) * 0.12 * life;
       const sg = sc * F.grow;

@@ -300,7 +300,17 @@ AG.GardenScene = {
       gl.enable(gl.DEPTH_TEST);
     }
 
-    return { flower, cam, view, init, resize, draw, drawFlowerBody, down, move, up, wheel, hover, heartScreen, resetView, camera, project,
+    /* glow sprites (the flower's sprite program) into the bound framebuffer: used by the building's
+       transformation for the particles rising up the facade */
+    function drawSprites(spr, sprC, vw, t) {
+      init();
+      p.shader(SH.spr);
+      SH.spr.setUniform('uView', vw.V); SH.spr.setUniform('uProj', vw.P); SH.spr.setUniform('uCamPos', vw.eye); SH.spr.setUniform('uTime', t || 0);
+      SH.spr.setUniform('uKind', 0); SH.spr.setUniform('uSpr', spr); SH.spr.setUniform('uSprC', sprC);
+      p.model(sprGeo);
+    }
+
+    return { flower, cam, view, init, resize, draw, drawFlowerBody, drawSprites, down, move, up, wheel, hover, heartScreen, resetView, camera, project,
       get dragging() { return mode === 'flower'; } };
   }
 };
