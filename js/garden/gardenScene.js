@@ -87,7 +87,7 @@ AG.GardenScene = {
       const cp = Math.cos(cam.pitch);
       // on a narrow (portrait) screen the camera stands back so the open flower (≈ 4.6 m to each
       // side of its centre) still fits across; on wider screens cam.dist is used as it is
-      const aspect = p.width / p.height, dist = Math.max(cam.dist, 5.2 / (Math.tan(cam.fov * Math.PI / 360) * aspect));
+      const aspect = p.width / p.height, dist = Math.max(Math.min(cam.dist, (cam.maxR || Infinity) / Math.max(cp, 0.2)), 5.2 / (Math.tan(cam.fov * Math.PI / 360) * aspect));
       view.eye = [cam.target[0] + Math.sin(cam.yaw) * cp * dist, cam.target[1] + Math.sin(cam.pitch) * dist, cam.target[2] + Math.cos(cam.yaw) * cp * dist];
       view.V = U.mat4.lookAt(view.eye, cam.target, [0, 1, 0]);
       view.P = U.mat4.perspective(cam.fov * Math.PI / 180, p.width / p.height, 0.05, 300);
@@ -257,11 +257,13 @@ AG.GardenScene = {
         const M = [1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, -2, 0, 1];
         const vm = { V: U.mat4.mul(view.V, M), P: view.P, eye: [view.eye[0], -2 - view.eye[1], view.eye[2]] };
         env.drawSolid(vm, t, st);
-        p.blendMode(p.ADD); gl.depthMask(false); env.drawPlants(vm, t, st);
+        env.drawPlants(vm, t, st, true);               // opaque, depth-tested
+        p.blendMode(p.ADD); gl.depthMask(false);
         drawFlowerBody(flower, vm);
         gl.enable(gl.DEPTH_TEST); gl.depthMask(true); p.blendMode(p.BLEND);
         env.drawFloor(vw, t, st);                       // translucent polish over the reflection
         env.drawSolid(vw, t, st);
+        env.drawPlants(vw, t, st);                     // opaque: before the glass and the flower
         gl.depthMask(false); env.drawGlass(vw, t, st);
       }
       const common = (sh) => { sh.setUniform('uView', view.V); sh.setUniform('uProj', view.P); sh.setUniform('uCamPos', view.eye); sh.setUniform('uTime', t); sh.setUniform('uCenter', flower.center); sh.setUniform('uScale', flower.scale); };
@@ -271,7 +273,6 @@ AG.GardenScene = {
       SH.spr.setUniform('uKind', 2); SH.spr.setUniform('uDisc', 2.25); SH.spr.setUniform('uBloom', flower.bloom); SH.spr.setUniform('uAwake', flower.awakeK);
       SH.spr.setUniform('uPulseR', flower.pulseR); SH.spr.setUniform('uPulseA', flower.pulseA); SH.spr.setUniform('uRingCol', col.ring);
       p.model(discGeo);
-      if (env && env.built) { p.blendMode(p.ADD); gl.depthMask(false); env.drawPlants(vw, t, st); }
       drawFlowerBody(flower, { V: view.V, P: view.P, eye: view.eye }, {
         beforePetals: () => { if (herBehind) { drawHer(o); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); } },
         afterPetals: () => { if (herPos && !herBehind) { drawHer(o); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); } }

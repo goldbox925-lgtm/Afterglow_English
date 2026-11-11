@@ -45,6 +45,8 @@ js/garden/r2Layer.js      AG.R2Layer: the p5-DRAWN light layer (beginShape / bez
                           screen space, after the composite                                   [phase 2]
 js/garden/r2Heroine.js    her movement in the garden: a p5.Vector arrive / seek steering
                           toward where the player points (mouseMoved / mousePressed)           [phase 3]
+js/garden/botanical.js    AG.Botanical: the atrium's procedural plants (hanging wisteria, planters),
+                          grown once into a cached opaque mesh.
 js/garden/vines.js        AG.Vines: procedural growth computed with p5 (noise-guided
                           p5.Vector walkers, bezier curves, lerpColor), used by the r2Layer
                           (garden, screen space) and by the renderer (facade, 3D)             [phase 4]
@@ -127,10 +129,7 @@ meshes after the tuning pass, `p.randomSeed` for repeatable variation):
   walkway rails.
 - **Stepped pearl platform:** 3 steps under the flower, with gold edge strips.
 - **Two curved walkways:** at 9 m and 17 m, with rails and under-edge light.
-- **8 planters:** crystal leaves and blossom spikes.
-- **126 hanging vines with lush wisteria cones:** three blossoms per segment, fuller toward the
-  middle of each cluster, from the walkways and the dome rim (paths shaped with `p.noise`, lengths
-  from `p.random`).
+- **8 planters and 102 hanging wisteria plants:** procedural, on the real beams (see *The procedural plants* below).
 - **The city beyond the glass:** the REAL Round 01 buildings round the doorway tower (1,165 of
   them, from the city's own collision boxes), in the city's own axes. The garden's origin is the
   doorway building's centre at the doorway's floor. Towers closer than 60 m are left out so the
@@ -145,7 +144,7 @@ meshes after the tuning pass, `p.randomSeed` for repeatable variation):
   reflection, more reflective at grazing angles. No real-time ray tracing.
 - **Floor inlays:** light rings and spokes, and a golden pool round the platform.
 - **City:** window grids, roof trims, aerial haze and a glow rising from below.
-- **Plants:** additive light, swaying in the vertex shader.
+- **Plants:** opaque and depth-tested (see *The procedural plants* below), swaying in the vertex shader.
 
 *Responding to her* (the existing streams: her position, `prox`, the flower's core):
 
@@ -186,8 +185,36 @@ static; per frame only uniforms and 48 + 14 small objects update.
   enlarged so the garden, the camera and the heroine fit.
 - The platform's top is evenly lit, without reflections of its own.
 - The dome is mostly above the default view.
-- The transformation's interior effects (Phase 4's flat interior walls and their leaves) stand
-  aside for the atrium; Part B moves them into it. The facade and rooftop parts are unchanged.
+- Phase 4's flat interior walls and their vines and leaves are gone. The transformation now plays
+  on the atrium itself (see *Inside the atrium* below). The facade and rooftop parts are unchanged.
+
+**The procedural plants (`js/garden/botanical.js`, the `gardenPlant` shader).** They replaced the
+hanging "cotton".
+
+*What was wrong.* Each strand carried three soft crossed quads, up to 1.2 m wide, every 0.6 m. They
+were drawn additively without depth writes, so they merged into blurry blobs, could not hide one
+another, and went over the bloom threshold. The camera could reach the walkways (r = 17.5 m), and
+nothing shrank sprites near the lens.
+
+*Now.*
+- 102 plants and 8 planter plants: 653 flower clusters, about 19,000 flowers, about 2,100 leaves,
+  160 k vertices in two cached meshes, built once. Only the lower mesh (walkway at 9 m, planters) is
+  drawn in the floor's reflection, and the upper plants' flowers have no wing petals.
+- Opaque and depth-tested, drawn with the metal before the glass and the flower.
+- Attached under the real beams: the walkways, the wall's top ring, the dome's first ring.
+  `p.noise` makes clumps and gaps along each beam; the tips stop above the flower.
+- `p.random`, `p.noise`, `p.createVector` and p5.Vector grow the paths; `p.map`, `p.lerp` and
+  `p.constrain` set lengths, taper and flower size; `p.bezierPoint` gives the leaf outline;
+  `p.lerpColor` the palette; `p.sin` / `p.cos` the whorls and the idle sway; `p.deltaTime` drives
+  the ripple through `dt`.
+- Plants within about 4 m of the camera, or of the line of sight to the flower, are dithered away.
+  `cam.maxR` (16.4 m) keeps the camera inside the walkways, except on a narrow portrait screen,
+  which needs the distance to fit the flower. Pollen fades near the lens, and drifting petals
+  larger than 42 px are skipped.
+- Streams: `uHer` / `uProx` (leaves lean and flutter, light rises), 12 sparks follow her; `uBloom`
+  (nearby flowers brighten); `R2.dragging` (a ripple through the plants); stages C and E (gold,
+  richer colours).
+- The platform's glow and highlight were reduced, so the flower reads against it.
 
 **Phase 4 notes (as built): the building's transformation.**
 
@@ -205,18 +232,16 @@ else only reads them.
 | `flowerPos`, `buildingPos` | the scene, the doorway's building | light origin, rooftop placement |
 
 *The stages:*
-- **A, awakening.** A golden pulse (two rings, p5 layer, `p.scale`). Golden light spreads from
-  the flower across the atrium floor and walls (a light front in the wall shader), and golden
-  light paths grow across the floor.
+- **A, awakening.** A golden pulse (two rings, p5 layer, `p.scale`). A golden wave spreads from
+  the flower across the atrium's platform and floor, and the floor's inlays turn gold behind it.
 - **B, energy flow.** Light rises up the building's columns and floor slabs, with pulses running
   up and along them, and the windows begin to light one by one (each has its own threshold).
-- **C, organic growth.** Pink, cyan and lavender vines climb the walls, tip-first. Luminous leaves
-  unfurl along them as the growth front passes (p5 layer: `push` / `translate` / `rotate` /
-  `scale` / `pop`, bezier leaf outlines).
+- **C, organic growth.** Pink, cyan and lavender vines climb the facade, tip-first. Small luminous
+  leaves unfurl from them as the growth front passes (see *Facade leaves* below).
 - **D, rooftop bloom.** A giant `AG.BloomFlower` opens above the roof, drawn by the existing
   flower renderer (`GardenScene.drawFlowerBody`: the same shaders and `p.rotate` / `p.scale`
   petal transforms). Inside, a rosette of light behind the flower opens, turns and pulses with
-  the same stage, and the walls glow from the top.
+  the same stage, and the dome and upper glass glow pink-gold.
 - **E, living architecture.** Everything breathes (`p.sin`), the vines' light flows, and the
   colours drift with `p.lerpColor`.
 
@@ -230,15 +255,37 @@ else only reads them.
   rebuild gives identical geometry).
 
 The paths become ribbon meshes (`AG.GeometryBuilder`) whose growth order the shader reveals.
-- **Inside**, the atrium walls are the doorway building's own footprint, enlarged to keep the
-  walls at least 24 m from the flower.
-- **Outside**, the four faces are the building's real lowest shaft, from the city's geometry,
-  with extra roots at both sides of the doorway.
+The vines grow only outside: the four faces are the building's real lowest shaft, from the city's
+geometry, with extra roots at both sides of the doorway.
+
+*Inside the atrium (`AG.Atrium.update` turns the streams into `A.fx`, `js/shaders/atrium.glsl.js`
+draws it).* Before 100 % every value is zero, so the room is exactly the Part A room.
+
+| Stage | Effect | Uniforms |
+|---|---|---|
+| A | A golden wave crosses the platform and then the floor (radius `St.A · 32 m`). Behind it the inlays and stone joints turn gold. Nothing is added right under the flower. | `uLight`, `uLightR` (solid, floor) |
+| B | Energy climbs the frames (front at `y = −1 + St.B · 49 m`). Behind it the strips turn gold and settle lower, so the pulses running up them read as moving light; the metal warms. | `uEnergy`, `uFrontY` (solid) |
+| B–D | The wall panes light one by one, in the facade windows' colours; about 70 % end up lit. | `uWin`, `uWinA`, `uWinB` (glass) |
+| C | Gold spreads out from the flower through the plants: stems and leaves turn gold, the flowers' throats light up and their colour stays. | `uGold`, `uGoldR` (plants) |
+| D | The dome and upper glass glow pink-gold, as added light, so the city stays visible through it. | `uDome` (glass) |
+| E | The plants' colours reach their richest, and all the room's light breathes with the facade (`Living.look().breath`). | `uColA`, `uColB`, `uBreath` |
+
+*Facade leaves (`AG.Vines.ribbons`, option `{ leafEvery, leafSize, rand }`).* They are part of the
+vine mesh: world-space quads on the same facade plane as the vines.
+- A leaf is based exactly on a point of its vine (every 4th path step), turned 0.7–1.1 rad off the
+  vine's direction, alternating sides along the vine. A leaf that would overhang the face's edge
+  is left out.
+- Its data is `(s, 2, depth, hash)`: `s` is that vine point's growth order, so it can never appear
+  before the vine reaches it; `across = 2` marks it as a leaf for `livingVine`.
+- The shader scales the leaf outline about its base by how far the front has passed it, so it
+  unfurls from the vine. Stage E fully opens the last leaves at the very tips.
+- Size, angle and hash come from the build's seeded `p.random`, so the same seed gives the same
+  leaves (verified: a rebuild gives identical geometry).
 
 *Rendering split:*
-- **WebGL / GLSL** (`js/shaders/living.glsl.js`, `AG.Living`): the walls, structure, windows,
-  the vines inside and outside, the floor light paths, and the rooftop flower.
-- **p5 drawing:** the golden pulse, the leaves and the rosette, plus the Phase 2 elements.
+- **WebGL / GLSL** (`js/shaders/living.glsl.js`, `AG.Living`): the facade walls, structure,
+  windows, the vines and their leaves, and the rooftop flower.
+- **p5 drawing:** the golden pulse and the rosette, plus the Phase 2 elements.
 
 *Performance.*
 - The meshes are built once (seeded) and grow by uniforms; nothing is allocated per frame for
@@ -251,7 +298,9 @@ The paths become ribbon meshes (`AG.GeometryBuilder`) whose growth order the sha
 
 *Other notes:*
 - **Exterior windows:** they are a soft overlay at about a third of the inside intensity, because
-  they sit over the city's own windows and don't align with them.
+  they sit over the city's own windows and don't align with them. Their colour is a per-window mix
+  of `uWinA` / `uWinB`, which `p.lerpColor` moves from cyan-lavender through pink to gold-pink as
+  the transformation progresses (`AG.Living`, 0..1 RGB).
 - **Heroine and camera:** the transformation never moves her or the camera. Measured over 2.5 s:
   camera unchanged; she drifted 0.29 m, which is the tail of her own arrival easing.
 

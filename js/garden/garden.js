@@ -175,7 +175,7 @@ AG.Garden = (function () {
       G.white = U.smooth(0, ENTER_T * 0.9, G.t);
       if (G.t >= ENTER_T) {
         G.phase = 'inside'; G.t = 0; G.white = 1; G.visits++;
-        if (!G.scene) G.scene = AG.GardenScene.create(p, { scale: 2.6 });
+        if (!G.scene) { G.scene = AG.GardenScene.create(p, { scale: 2.6 }); G.scene.cam.maxR = 16.4; }   // (the camera stays inside the walkways' 17.5 m edge)
         showInside(true);
         enterGardenFlight();
         AG.U.emit('gardenPhase', { phase: G.phase });
@@ -212,7 +212,7 @@ AG.Garden = (function () {
     // (js/garden/atrium.js), whose light follows the same data streams (her position, closeness,
     // the flower's glow). (Phase 4's interior walls stand aside for the atrium: the transformation's
     // inside effects move into it in Part B; the city facade and rooftop are unchanged.)
-    const f0 = G.scene.flower, streams = { t: f0.t, her: AG.Flight.garden ? AG.Flight.pos : null, prox: G.prox || 0, core: f0.core, bloom: f0.bloom };
+    const f0 = G.scene.flower, streams = { t: f0.t, her: AG.Flight.garden ? AG.Flight.pos : null, prox: G.prox || 0, core: f0.core, bloom: f0.bloom, eye: G.scene.view.eye };
     if (G.atrium) G.atrium.update(dt, streams);
     G.scene.draw(dt, { CH, env: G.atrium, streams });
     if (!G.layer) G.layer = AG.R2Layer.create(p);

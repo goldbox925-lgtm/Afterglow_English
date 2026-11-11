@@ -15,7 +15,9 @@
      B  energy travelling along the structure: columns and floor slabs
         light up from the bottom, pulses run up them
      windows  each window cell has its own threshold (hash) against the
-        window stream, so they come on one by one
+        window stream, so they come on one by one; their colour is a
+        per-window mix of uWinA / uWinB, which p.lerpColor moves from
+        cyan-lavender through pink to gold as the building transforms
      D  a pink-gold glow descending from the top (the rooftop bloom)
      E  everything breathes
      kind (aVertexColor.x): 0 wall, 1 floor (inside only)
@@ -23,6 +25,10 @@
      (js/garden/vines.js). aVertexColor = (s, across, depth, hash):
      s = growth order 0..1; drawn up to the growth front uGrow (stage C)
      with a bright tip; colours uColA/B/C from p.lerpColor.
+     Leaves share the mesh: quads on the same wall, across = 2 flags
+     them, s = the vine point they grow from, uv = (across, along) with
+     the base at v = 0. The leaf shape is scaled about that base by how
+     far the growth front has passed it, so it unfurls from the vine.
    ===================================================================== */
 AG.SHADERS.livingWall = {
   vert: AG.SHADERS.header + `
@@ -39,6 +45,7 @@ in vec3 vWorld; in vec2 vUv; in vec4 vData;
 out vec4 outColor;
 uniform vec4 uStage; uniform float uE, uBreath, uWin, uReach, uHeight, uInterior, uFade;
 uniform vec3 uOrigin; uniform vec2 uGrid;      // column spacing, storey height (metres)
+uniform vec3 uWinA, uWinB;                     // window colours, 0..1 RGB (p.lerpColor by transform, js/garden/living.js)
 void main(){
   vec2 m = vUv;
   float A = uStage.x, B = uStage.y, D = uStage.w;
@@ -80,7 +87,7 @@ void main(){
   float inWin = smoothstep(1.0, 0.55, max(abs(wq.x), abs(wq.y))) * (0.55 + 0.45 * exp(-dot(wq, wq) * 1.5));
   float th = hash12(cell + uInterior * 31.0) * 1.35;                 // about a quarter never light
   float on = smoothstep(th, th + 0.1, uWin * (0.65 + 0.35 * smoothstep(uHeight, 0.0, m.y)));
-  vec3 winCol = mix(gold, pink, hash12(cell * 1.7 + 3.0) * 0.8);
+  vec3 winCol = mix(uWinA, uWinB, hash12(cell * 1.7 + 3.0) * 0.8);   // each window sits at its own point between the two
   c += winCol * inWin * on * (0.13 + 0.04 * sin(uTime * 1.3 + th * 30.0)) * mix(0.35, 1.0, uInterior);   // outside: over the city's own windows, so softer
   // D: a pink-gold glow descending from the top of the walls
   float top = smoothstep(uHeight * (1.0 - 0.7 * D), uHeight, m.y) * D;
@@ -96,20 +103,36 @@ AG.SHADERS.livingVine = {
   vert: AG.SHADERS.header + `
 in vec3 aPosition; in vec2 aTexCoord; in vec4 aVertexColor;
 uniform mat4 uView, uProj;
-out vec4 vData; out vec3 vWorld;
+out vec4 vData; out vec3 vWorld; out vec2 vUv;
 void main(){
-  vData = aVertexColor; vWorld = aPosition;
+  vData = aVertexColor; vWorld = aPosition; vUv = aTexCoord;
   gl_Position = uProj * uView * vec4(aPosition, 1.0);
 }
 `,
   frag: AG.SHADERS.header + AG.SHADERS.common + `
-in vec4 vData; in vec3 vWorld;
+in vec4 vData; in vec3 vWorld; in vec2 vUv;
 out vec4 outColor;
 uniform float uGrow, uBreath, uE, uFade;
 uniform vec3 uColA, uColB, uColC;
 void main(){
   float s = vData.x;
   if (s > uGrow) discard;
+  if (vData.y > 1.5){
+    // A LEAF: it opens as the growth front moves past its vine point (fully open by stage E even
+    // at the very tips, where the front stops); the outline is scaled about the leaf's base
+    float g = max(smoothstep(0.0, 0.05, uGrow - s), uE);
+    if (g < 0.01) discard;
+    float al = vUv.y / g, x = (vUv.x * 2.0 - 1.0) / g;
+    if (al > 1.0) discard;
+    float edge = pow(max(sin(PI * pow(al, 0.7)), 0.0), 0.8) - abs(x);
+    if (edge <= 0.0) discard;
+    float rib = exp(-x * x * 70.0) * (1.0 - al);
+    float pulse = 0.8 + 0.2 * sin(s * 60.0 - uTime * 2.4 + vData.w * 20.0);
+    vec3 lc = mix(mix(uColA, uColB, vData.w), uColC, vData.z * 0.5);
+    float lk = (0.32 * smoothstep(0.0, 0.3, edge) + 0.75 * smoothstep(0.2, 0.0, edge) + 0.6 * rib) * pulse * (0.85 + 0.25 * uE);
+    outColor = vec4(lc * lk * uBreath * uFade, 1.0);
+    return;
+  }
   float across = exp(-vData.y * vData.y * 2.4);
   float tip = exp(-pow((uGrow - s) * 22.0, 2.0));                  // the bright growing tip
   float flow = 0.7 + 0.3 * sin(s * 60.0 - uTime * 2.4 + vData.w * 20.0);   // light flowing along it

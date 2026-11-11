@@ -8,14 +8,9 @@
 
    What it builds (once, deterministically per city, when the
    transformation starts: p.randomSeed(seed from the building)):
-     ATRIUM   inside the Memory Garden: the doorway building's own
-              footprint (enlarged so the garden fits), four inner walls
-              and a floor (AG.SHADERS.livingWall), light vines grown on
-              those walls (AG.Vines → AG.SHADERS.livingVine), golden light
-              paths grown across the floor (the same vine program), and
-              leaf nodes along the wall vines (drawn by the p5 light
-              layer, js/garden/r2Layer.js)
-     FACADE   outside in the city: the same wall program on the
+     (inside the Memory Garden the transformation plays on the glass
+     atrium itself: js/garden/atrium.js reads the same stages)
+     FACADE  outside in the city: the same wall program on the
               building's four REAL faces (its lowest shaft, from the
               city's own geometry), light vines grown on those faces from
               the ground and from the doorway's sides
@@ -26,7 +21,7 @@
    Stages (AG.R2.stage, each 0..1, overlapping so nothing is abrupt):
      A awakening   golden light spreads from the flower through the atrium
      B energy      lines travel up the structure; windows begin to light
-     C growth      pink / cyan / lavender vines climb the walls
+     C growth      pink / cyan / lavender vines climb the facade
      D rooftop     the giant flower opens on the roof; light from above
      E living      everything breathes (p.sin), the vines' light flows
    ===================================================================== */
@@ -73,7 +68,7 @@ AG.Living = (function () {
         roots.push([ud - P.w / 2 - 0.5, vd - P.h / 2 + 1, -0.5, 1, 0], [ud + P.w / 2 + 0.5, vd - P.h / 2 + 1, 0.5, 1, 0], [ud, vd + P.h / 2 + 1, 0, 1, 0]);
       }
       const branches = AG.Vines.grow(p, { roots, step: 1.1, steps: Math.round(FH / 1.1 * 1.2), turn: 0.3, freq: 0.05, nz: nz + 300 + fsets.length * 13, bias: [0, 1], biasK: 0.07, branchP: 0.05, maxDepth: 2, maxBranches: 45, u0: 0.2, u1: 2 * ht - 0.2, v0: 0, v1: FH - 0.5 });
-      fsets.push({ surf, branches });
+      fsets.push({ surf, branches, bounds: [0, 2 * ht, 0, FH] });      // (leaves stay on this face)
       faces.push({ O, t, n, w: 2 * ht, h: FH });
     }
     const FV = new AG.GeometryBuilder('facadeVines');
@@ -198,5 +193,5 @@ AG.Living = (function () {
 
   function reset() { built = null; L.built = null; }
 
-  return Object.assign(L, { init, update, drawCity, reset, built: null });
+  return Object.assign(L, { init, update, drawCity, reset, look, built: null });
 })();

@@ -26,10 +26,11 @@ callbacks in `js/sketch.js`.
 
 **At 100 % the building awakens** (Phase 4, `js/garden/living.js`). The stages follow each
 other over about 40 s; the meter shows the stage and its progress.
-- **Inside** (the atrium round the flower): golden light, then energy along the structure,
-  windows, vines with unfurling leaves, a rosette of light, and finally breathing.
-- **Outside** (Back to the city): the facade lights up, vines climb it, and a giant flower opens
-  above the roof.
+- **Inside** (the atrium round the flower): a golden wave across the platform and floor, energy
+  climbing the frames, the glass panes lighting one by one, gold spreading through the hanging wisteria, a rosette
+  of light and a glowing dome, and finally breathing.
+- **Outside** (Back to the city): the facade lights up and its windows shift from cool to warm
+  colours, vines climb it and small leaves unfurl from them, and a giant flower opens on the roof.
 - The transformation stays; Play again / R / R02 reset it.
 
 **Phase:** `AG.R2` (`js/garden/round2.js`) is Round 02's shared state. It derives the phase

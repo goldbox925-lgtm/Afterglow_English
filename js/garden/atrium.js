@@ -15,9 +15,8 @@
        strips on every third mullion, at the floor cove and the walkways
      · a stepped pearl platform (3 steps) under the flower, gold strips
      · two curved walkways (9 m, 17 m) with glowing rails
-     · 8 luminous planters with crystal leaves and blossom spikes
-     · hanging vines with wisteria-like blossoms, from the walkways and
-       the dome's rim (paths shaped with p.noise, lengths p.random)
+     · 8 planters and the hanging wisteria on the real beams: procedural,
+       opaque, depth-tested meshes (js/garden/botanical.js)
      · the city: every building round the tower (from the city's own
        collision boxes), the city floor far below
    Per frame (update): wind from p.noise; the architecture's light
@@ -52,7 +51,7 @@ AG.Atrium = {
     function build(info) {
       p.randomSeed(opts.seed || 7);
       const S = new AG.GeometryBuilder('atriumSolid'), G = new AG.GeometryBuilder('atriumGlass');
-      const F = new AG.GeometryBuilder('atriumFloor'), P = new AG.GeometryBuilder('gardenPlants'), C = new AG.GeometryBuilder('gardenCity');
+      const F = new AG.GeometryBuilder('atriumFloor'), P = new AG.GeometryBuilder('gardenPlants'), PU = new AG.GeometryBuilder('gardenPlantsHigh'), C = new AG.GeometryBuilder('gardenCity');
       const metal = (strip) => [0, strip ? 1 : 0, p.random(), 0];
       const da = (Math.PI * 2) / NF, bandH = (WALL - FL) / ROWS;
 
@@ -123,7 +122,7 @@ AG.Atrium = {
         F.quad(ring(R, FL, a1), ring(R, FL, a0), ring(0.01, FL, a0), ring(0.01, FL, a1), [0, 1, 0]);
       }
       // ---- planters with crystal leaves and blossom spikes ----
-      const planters = [];
+      const planters = [], Bot = AG.Botanical.create(p, P);
       for (let k = 0; k < 8; k++) {
         const a = (k / 8) * Math.PI * 2 + 0.2, pc = ring(15.2, FL, a);
         planters.push(pc);
@@ -134,43 +133,27 @@ AG.Atrium = {
           S.quad(at(1.3, 0, b1), at(1.3, 0, b0), at(1.4, 0.95, b0), at(1.4, 0.95, b1), n);
           beam(S, at(1.42, 0.97, b0), at(1.42, 0.97, b1), 0.06, 0.06, [3, 1, 0.9, 0]);
         }
-        for (let i = 0; i < 9; i++) {                                     // leaves: curved ribbons, base → tip
-          const b = p.random(Math.PI * 2), len = p.random(2.0, 3.6), lean = p.random(0.35, 0.9), hue = p.random(0.1, 0.5);
-          const dir = [Math.cos(b), 0, Math.sin(b)], side = [-Math.sin(b), 0, Math.cos(b)], base = V3.add(pc, [0, 0.9, 0]);
-          let prev = null;
-          for (let s = 0; s <= 8; s++) {
-            const t = s / 8, w = 0.3 * Math.sin(Math.PI * Math.min(1, t * 1.15 + 0.08));
-            const c = V3.add(base, V3.add(V3.scale(dir, lean * len * t * t), [0, len * t, 0]));
-            const l = V3.add(c, V3.scale(side, -w)), r = V3.add(c, V3.scale(side, w));
-            if (prev) { P.data = [2, t, b, hue]; P.quad(prev[0], prev[1], r, l, dir, [0, 0, 1, 1]); }
-            prev = [l, r];
-          }
-        }
-        for (let i = 0; i < 4; i++) {                                     // blossom spikes
-          const b = p.random(Math.PI * 2), h0 = p.random(1.4, 2.2), base = V3.add(pc, [Math.cos(b) * 0.5, 0.9, Math.sin(b) * 0.5]);
-          for (let s = 0; s < 7; s++) blossom(P, V3.add(base, [0, h0 * (0.4 + s / 10), 0]), 0.22 - s * 0.018, 2, 0.4 + s / 14, b, p.random(0.4, 1));
-        }
+        Bot.planter(p.createVector(pc[0], pc[1] + 0.9, pc[2]));
       }
-      // ---- hanging vines with blossoms: from the walkways' edges and the dome's rim ----
-      let strands = 0;
-      const hang = (top, len) => {
-        const ph = p.random(), hue = p.random();
-        const nz = p.random(100);
-        let prev = top, prevAlong = 0;
-        const segs = Math.max(6, Math.round(len / 0.6));
-        for (let s = 1; s <= segs; s++) {
-          const t = s / segs;
-          const off = [(p.noise(nz, t * 2) - 0.5) * 0.8 * t, 0, (p.noise(nz + 7, t * 2) - 0.5) * 0.8 * t];
-          const q = V3.add(V3.add(top, [0, -len * t, 0]), off);
-          ribbon(P, prev, q, 0.05, [0, prevAlong, ph, hue], [0, t, ph, hue]);
-          // wisteria: blossoms crowd the lower part, fuller toward the middle of the cluster
-          if (t > 0.22) for (let k = 0; k < 3; k++) blossom(P, V3.add(q, [p.random(-0.28, 0.28), p.random(-0.25, 0.25), p.random(-0.28, 0.28)]), 0.24 + 0.36 * Math.sin(Math.PI * Math.min(1, (t - 0.15) * 1.15)), 1, t, ph, (hue + k * 0.12) % 1);
-          prev = q; prevAlong = t;
-        }
-        strands++;
-      };
-      for (const [y, aS, aE] of walks) for (let a = aS; a < aE; a += 0.11) if (p.random() < 0.7) hang(ring(17.7, y - 0.55, a + p.random(-0.03, 0.03)), p.random(2.5, 6.5));
-      for (let a = 0; a < Math.PI * 2; a += 0.065) if (p.random() < 0.85) hang(ring(R - 1.0 - p.random(0, 1.5), WALL - 0.4, a), p.random(5, 12));
+      // ---- hanging wisteria, attached under the real beams. Clumps and gaps along each beam come
+      // from p.noise, so the architecture and the glass stay visible; lengths are limited so the
+      // tips stop above the flower ----
+      const clump = (a, off, thr) => p.noise(Math.cos(a) * 1.4 + off, Math.sin(a) * 1.4 + off) > thr;
+      for (const [y, aS, aE] of walks) for (let a = aS; a < aE; a += 0.11) {
+        if (!clump(a, y, 0.43) || p.random() > 0.85) continue;
+        Bot.use(y < 12 ? P : PU, y >= 12);                                       // only what the floor can show is mirrored
+        Bot.plant(p.createVector(...ring(17.7, y - 0.5, a + p.random(-0.03, 0.03))), y < 12 ? p.random(1.1, 2.6) : p.random(3.0, 6.5));
+      }
+      Bot.use(PU, true);
+      for (let a = 0; a < Math.PI * 2; a += 0.08) {                     // under the wall's top ring beam
+        if (!clump(a, 31.7, 0.42) || p.random() > 0.85) continue;
+        Bot.plant(p.createVector(...ring(R - 0.2, WALL - 0.16, a)), p.random(5, 13));
+      }
+      for (let a = 0; a < Math.PI * 2; a += 0.13) {                     // under the dome's first ring
+        if (!clump(a, 57.3, 0.45) || p.random() > 0.8) continue;
+        const q = domeAt(2 / DR, a, 0.25); q[1] -= 0.13;
+        Bot.plant(p.createVector(...q), p.random(8, 15));
+      }
       // ---- the city round the tower, from the city's own data ----
       const O = opts.origin;
       let nb = 0;
@@ -188,34 +171,19 @@ AG.Atrium = {
       }
       C.data = [0, 2, 0, 0];
       C.quad([-3000, -O[1], 3000], [3000, -O[1], 3000], [3000, -O[1], -3000], [-3000, -O[1], -3000], [0, 1, 0]);
-      geo = { solid: S.build(p), glass: G.build(p), floor: F.build(p), plants: P.build(p), city: C.build(p) };
-      A.stats = { strands, planters: planters.length, cityBuildings: nb, vertices: Object.fromEntries(Object.entries(geo).map(([k, g]) => [k, g.reduce((s, x) => s + x.vertices.length, 0)])) };
+      geo = { solid: S.build(p), glass: G.build(p), floor: F.build(p), plants: P.build(p), plantsHigh: PU.build(p), city: C.build(p) };
+      A.stats = { botanical: Bot.stats, planters: planters.length, cityBuildings: nb, vertices: Object.fromEntries(Object.entries(geo).map(([k, g]) => [k, g.reduce((s, x) => s + x.vertices.length, 0)])) };
       A.planters = planters;
       A.cityFloorY = -O[1];
       // pollen motes and drifting petals (p5.Vector trajectories)
       A.pollen = []; for (let i = 0; i < 48; i++) A.pollen.push({ pos: p.createVector(p.random(-18, 18), p.random(0, 20), p.random(-18, 18)), vel: p.createVector(0, 0, 0), seed: p.random(100), size: p.random(0.06, 0.16) });
       A.petals = []; for (let i = 0; i < 14; i++) A.petals.push({ pos: p.createVector(p.random(-14, 14), p.random(2, 26), p.random(-14, 14)), vel: p.createVector(0, -p.random(0.3, 0.6), 0), spin: p.random(-1, 1), seed: p.random(100), size: p.random(0.18, 0.32), hue: p.random() });
+      A.sparks = []; for (let i = 0; i < 12; i++) A.sparks.push({ pos: p.createVector(0, -50, 0), seed: p.random(100), size: p.random(0.05, 0.1) });
       A.built = true;
     }
 
-    /* a soft blossom: two crossed quads */
-    function blossom(B, c, s, kind, along, ph, hue) {
-      B.data = [kind, along, ph, hue];
-      B.quad(V3.add(c, [-s, -s, 0]), V3.add(c, [s, -s, 0]), V3.add(c, [s, s, 0]), V3.add(c, [-s, s, 0]), [0, 0, 1], [0, 0, 1, 1]);
-      B.quad(V3.add(c, [0, -s, -s]), V3.add(c, [0, -s, s]), V3.add(c, [0, s, s]), V3.add(c, [0, s, -s]), [1, 0, 0], [0, 0, 1, 1]);
-    }
-    /* a thin vine segment: two crossed ribbons; data per end (the "along" value moves with it) */
-    function ribbon(B, a, b, w, da, db) {
-      B._ensure(8);
-      for (const side of [[w, 0, 0], [0, 0, w]]) {
-        const v0 = B.rawVertex(V3.sub(a, side), [0, 0, 1], 0, 0, da), v1 = B.rawVertex(V3.add(a, side), [0, 0, 1], 1, 0, da);
-        const v2 = B.rawVertex(V3.add(b, side), [0, 0, 1], 1, 1, db), v3 = B.rawVertex(V3.sub(b, side), [0, 0, 1], 0, 1, db);
-        B.rawTri(v0, v1, v2); B.rawTri(v0, v2, v3);
-      }
-    }
-
     /* ---------- per frame: the streams → uniforms and the moving bits ---------- */
-    const COL = { violet: p.color(140, 110, 255), pink: p.color(255, 120, 210), gold: p.color(255, 190, 110), cyan: p.color(120, 225, 255), lav: p.color(190, 160, 255) };
+    const COL = { violet: p.color(140, 110, 255), pink: p.color(255, 120, 210), gold: p.color(255, 190, 110), cyan: p.color(120, 225, 255), lav: p.color(190, 160, 255), pinkRich: p.color(255, 80, 200), lavRich: p.color(165, 95, 255) };
     const rgb = (c) => [p.red(c) / 255, p.green(c) / 255, p.blue(c) / 255];
     const tmp = p.createVector(0, 0, 0), herV = p.createVector(0, 0, 0), pull = p.createVector(0, 0, 0);   // reused: no per-frame allocation
     function update(dt, s) {
@@ -229,8 +197,24 @@ AG.Atrium = {
       A.strip = rgb(p.lerpColor(p.lerpColor(COL.lav, COL.gold, 0.35), p.lerpColor(COL.pink, COL.gold, 0.6), k));
       A.inlay = rgb(p.lerpColor(COL.lav, COL.gold, k * 0.7));
       A.pool = p.lerp(A.pool || 6, p.map(prox, 0, 1, 6, 12), 1 - Math.exp(-2 * dt));
+      // THE TRANSFORMATION, read from AG.R2's streams (nothing of it is stored here). Below 100 %
+      // every value is 0 and the room is exactly as it was.
+      const R2 = AG.R2, St = R2.stage, lk = R2.transform > 0 && AG.Living ? AG.Living.look() : null;
+      A.fx = {
+        light: St.A, lightR: St.A * (R + 8), energy: St.B, frontY: FL + St.B * (DOME - FL + 4), win: R2.windows, dome: St.D,
+        winA: lk ? lk.winA : [0, 0, 0], winB: lk ? lk.winB : [0, 0, 0], breath: lk ? lk.breath : 1,
+        // the plants' colours deepen as the flower opens and at the end of the transformation
+        pink: rgb(p.lerpColor(COL.pink, COL.pinkRich, p.max(0.25 + s.bloom * 0.35, St.E))), lav: rgb(p.lerpColor(COL.lav, COL.lavRich, p.max(0.45 + s.bloom * 0.3, St.E))),
+        goldNear: St.C, goldR: St.C * 48
+      };
+      // idle sway: slow p.noise wind (above) plus a p.sin / p.cos drift; a light ripple through the
+      // plants while the flower is being dragged (p.lerp to smooth it, p.deltaTime through dt)
+      A.sway = [p.sin(t * 0.23) * 0.1, p.cos(t * 0.17) * 0.1];
+      A.rippleA = p.lerp(A.rippleA || 0, R2.dragging ? 1 : 0, 1 - Math.exp(-4 * dt));
+      A.rippleR = ((A.rippleR || 0) + dt * p.map(s.bloom, 0, 1, 9, 15)) % 34;
       // pollen: a noise flow field, rising over the flower, drawn toward her as she comes close
-      const her = s.her;
+      const her = s.her, eye = s.eye;
+      const nearFade = (q) => (eye ? p.constrain(p.map(p.dist(q.x, q.y, q.z, eye[0], eye[1], eye[2]), 1.5, 6, 0, 1), 0, 1) : 1);   // a sprite never swells in front of the lens
       A.spr.fill(0); A.sprC.fill(0);
       for (let i = 0; i < A.pollen.length; i++) {
         const m = A.pollen[i], q = m.pos;
@@ -243,7 +227,19 @@ AG.Atrium = {
         const tw = 0.6 + 0.4 * p.sin(t * 2 + m.seed);
         A.spr.set([q.x, q.y, q.z, m.size * (1 + 0.6 * prox)], i * 4);
         const c = rgb(p.lerpColor(COL.lav, COL.gold, (i % 5) / 5 * 0.6 + 0.3 * prox));
-        A.sprC.set([c[0], c[1], c[2], 0.5 * tw * (0.6 + 0.6 * prox)], i * 4);
+        A.sprC.set([c[0], c[1], c[2], 0.5 * tw * (0.6 + 0.6 * prox) * nearFade(q)], i * 4);
+      }
+      // a few sparks follow her among the plants (uses the sprite slots after the pollen)
+      for (let i = 0; i < A.sparks.length; i++) {
+        const m = A.sparks[i], q = m.pos, slot = (A.pollen.length + i) * 4;
+        if (!her || prox < 0.02) { A.sprC.set([0, 0, 0, 0], slot); continue; }
+        const a = p.noise(m.seed, t * 0.3) * Math.PI * 4;
+        tmp.set(her[0] + p.cos(a) * 1.2, her[1] + p.map(p.noise(m.seed + 4, t * 0.4), 0, 1, -0.8, 0.8), her[2] + p.sin(a) * 1.2);
+        if (q.y < -20) q.set(tmp);
+        q.lerp(tmp, 1 - Math.exp(-(1.2 + i * 0.12) * dt));
+        A.spr.set([q.x, q.y, q.z, m.size], slot);
+        const c = rgb(p.lerpColor(COL.pink, COL.gold, (i % 4) / 3));
+        A.sprC.set([c[0], c[1], c[2], 0.6 * prox * nearFade(q)], slot);
       }
       // petals drifting down: a slow fall, a noise breeze, a turning spin
       for (const pt of A.petals) {
@@ -272,24 +268,31 @@ AG.Atrium = {
       const sh = shaders(); p.shader(sh.solid); common(sh.solid, vw, t);
       sh.solid.setUniform('uWarmPos', [0, 1.2, 0]); sh.solid.setUniform('uWarm', 0.8 + 0.6 * (s.core || 0) + 0.5 * (s.prox || 0));
       sh.solid.setUniform('uStripCol', A.strip); sh.solid.setUniform('uKeyCol', [0.75, 0.72, 1.0]); sh.solid.setUniform('uProx', s.prox || 0);
+      sh.solid.setUniform('uEnergy', A.fx.energy); sh.solid.setUniform('uFrontY', A.fx.frontY); sh.solid.setUniform('uBreath', A.fx.breath);
+      sh.solid.setUniform('uLight', A.fx.light); sh.solid.setUniform('uLightR', A.fx.lightR);
       geo.solid.forEach((g) => p.model(g));
     }
-    function drawPlants(vw, t, s) {
+    function drawPlants(vw, t, s, reflection) {
       const sh = shaders(); p.shader(sh.plant); common(sh.plant, vw, t);
-      sh.plant.setUniform('uWind', A.wind); sh.plant.setUniform('uHer', s.her || [0, -100, 0]); sh.plant.setUniform('uProx', s.prox || 0);
-      sh.plant.setUniform('uColA', [1.0, 0.5, 0.85]); sh.plant.setUniform('uColB', [0.72, 0.55, 1.0]); sh.plant.setUniform('uColC', [0.5, 0.85, 1.0]);
-      sh.plant.setUniform('uGlow', 1.7);
+      sh.plant.setUniform('uWind', A.wind); sh.plant.setUniform('uSway', A.sway); sh.plant.setUniform('uHer', s.her || [0, -100, 0]); sh.plant.setUniform('uFocus', [0, 2.4, 0]);
+      sh.plant.setUniform('uProx', s.prox || 0); sh.plant.setUniform('uBloom', s.bloom || 0); sh.plant.setUniform('uBreath', A.fx.breath);
+      sh.plant.setUniform('uColA', A.fx.pink); sh.plant.setUniform('uColB', A.fx.lav); sh.plant.setUniform('uColC', [0.5, 0.85, 1.0]); sh.plant.setUniform('uGoldC', [1.0, 0.72, 0.34]);
+      sh.plant.setUniform('uGold', A.fx.goldNear); sh.plant.setUniform('uGoldR', A.fx.goldR); sh.plant.setUniform('uRippleR', A.rippleR); sh.plant.setUniform('uRippleA', A.rippleA);
       geo.plants.forEach((g) => p.model(g));
+      if (!reflection) geo.plantsHigh.forEach((g) => p.model(g));      // the upper plants are not mirrored
     }
     function drawFloor(vw, t, s) {
       const sh = shaders(); p.shader(sh.floor); common(sh.floor, vw, t);
       sh.floor.setUniform('uProx', s.prox || 0); sh.floor.setUniform('uPool', A.pool || 6); sh.floor.setUniform('uRings', 0.55 + 0.6 * (s.prox || 0));
       sh.floor.setUniform('uInlayCol', A.inlay); sh.floor.setUniform('uPoolCol', [1.0, 0.62, 0.3]);
+      sh.floor.setUniform('uLight', A.fx.light); sh.floor.setUniform('uLightR', A.fx.lightR); sh.floor.setUniform('uBreath', A.fx.breath);
       geo.floor.forEach((g) => p.model(g));
     }
     function drawGlass(vw, t, s) {
       const sh = shaders(); p.shader(sh.glass); common(sh.glass, vw, t);
       sh.glass.setUniform('uTintA', [0.45, 0.75, 1.0]); sh.glass.setUniform('uTintB', [0.75, 0.6, 1.0]); sh.glass.setUniform('uProx', s.prox || 0);
+      sh.glass.setUniform('uWin', A.fx.win); sh.glass.setUniform('uWinA', A.fx.winA); sh.glass.setUniform('uWinB', A.fx.winB);
+      sh.glass.setUniform('uDome', A.fx.dome); sh.glass.setUniform('uBreath', A.fx.breath);
       geo.glass.forEach((g) => p.model(g));
     }
 

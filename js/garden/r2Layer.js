@@ -141,7 +141,7 @@ AG.R2Layer = {
       for (const pt of A.petals) {
         const s = scene.project([pt.pos.x, pt.pos.y, pt.pos.z]), s2 = scene.project([pt.pos.x, pt.pos.y + pt.size, pt.pos.z]);
         const px = p.dist(s[0], s[1], s2[0], s2[1]);
-        if (px < 1.5 || s[0] < -30 || s[0] > p.width + 30 || s[1] < -30 || s[1] > p.height + 30) continue;
+        if (px < 1.5 || px > 42 || s[0] < -30 || s[0] > p.width + 30 || s[1] < -30 || s[1] > p.height + 30) continue;
         const col = p.lerpColor(COL.pink, COL.lav, pt.hue);
         p.push();
         p.translate(s[0], s[1]);

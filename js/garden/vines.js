@@ -23,8 +23,11 @@
    The surfaces are the building's real planes, so the vines follow its
    geometry: plane(O, U, V, N) maps (u, v) → world = O + U·u + V·v + N·off.
    ribbons() turns the paths into one mesh (AG.GeometryBuilder) that the
-   WebGL renderer draws with AG.SHADERS.livingVine; nodes() returns
-   points along them for the p5-drawn leaves.
+   WebGL renderer draws with AG.SHADERS.livingVine. With a leaf option,
+   ribbons() also adds small leaves to that mesh: world-space quads on
+   the same surface, based on a vine point and alternating sides of it,
+   so they follow the facade and appear only once the vine reaches them.
+   nodes() returns points along the paths.
    ===================================================================== */
 window.AG = window.AG || {};
 
@@ -60,9 +63,29 @@ AG.Vines = (function () {
     return { O, U, V, N, at: (u, v) => V3.add(V3.add(V3.add(O, V3.scale(U, u)), V3.scale(V, v)), V3.scale(N, off)) };
   }
 
-  /* the paths as ribbons in one mesh; data = (s / sMax, across ±1, depth, hash) */
-  function ribbons(B, sets, sMax, width) {
-    for (const { surf, branches } of sets) {
+  /* one leaf on the surface: its base on the vine point `a`, turned off the vine's direction to
+     `side`; uv = (across, along), data = (the point's growth order, 2 = leaf, depth, hash).
+     A leaf that would hang over the surface's edge (bounds [u0, u1, v0, v1]) is not added. */
+  function leaf(B, surf, bounds, a, b, side, size, angle, s, dep, h) {
+    let tu = b[0] - a[0], tv = b[1] - a[1];
+    const l = Math.hypot(tu, tv) || 1; tu /= l; tv /= l;
+    const c = Math.cos(side * angle), sn = Math.sin(side * angle);
+    const du = tu * c - tv * sn, dv = tu * sn + tv * c, pu = -dv, pv = du, w = size * 0.36;
+    const corners = [[a[0] - pu * w, a[1] - pv * w], [a[0] + pu * w, a[1] + pv * w],
+      [a[0] + pu * w + du * size, a[1] + pv * w + dv * size], [a[0] - pu * w + du * size, a[1] - pv * w + dv * size]];
+    if (bounds && corners.some((q) => q[0] < bounds[0] || q[0] > bounds[1] || q[1] < bounds[2] || q[1] > bounds[3])) return false;
+    B._ensure(4);
+    const d = [s, 2, dep, h], uvs = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    const v = corners.map((q, i) => B.rawVertex(surf.at(q[0], q[1]), surf.N, uvs[i][0], uvs[i][1], d));
+    B.rawTri(v[0], v[1], v[2]); B.rawTri(v[0], v[2], v[3]);
+    return true;
+  }
+
+  /* the paths as ribbons in one mesh; data = (s / sMax, across ±1, depth, hash).
+     leaves (optional): { leafEvery: path steps between leaves, leafSize: metres, rand: () => 0..1,
+     seeded by the caller so the same seed gives the same leaves } */
+  function ribbons(B, sets, sMax, width, leaves) {
+    for (const { surf, branches, bounds } of sets) {
       for (const br of branches) {
         const P = br.pts, w0 = width * (br.depth ? 0.55 : 1), h = (br.pts.length * 0.618 + br.depth * 0.31) % 1;
         for (let i = 0; i < P.length - 1; i++) {
@@ -78,6 +101,15 @@ AG.Vines = (function () {
           const v0 = B.rawVertex(A0, surf.N, 0, 0, [sa, -1, dep, h]), v1 = B.rawVertex(A1, surf.N, 1, 0, [sa, 1, dep, h]);
           const v2 = B.rawVertex(B1, surf.N, 1, 1, [sb, 1, dep, h]), v3 = B.rawVertex(B0, surf.N, 0, 1, [sb, -1, dep, h]);
           B.rawTri(v0, v1, v2); B.rawTri(v0, v2, v3);
+        }
+        if (leaves && leaves.leafEvery > 0) {
+          const dep = Math.min(1, br.depth / 2);
+          let side = 1;
+          for (let i = leaves.leafEvery; i < P.length - 1; i += leaves.leafEvery) {
+            const size = leaves.leafSize * (br.depth ? 0.8 : 1) * (0.8 + 0.4 * leaves.rand()), angle = 0.7 + 0.4 * leaves.rand(), hash = leaves.rand();
+            leaf(B, surf, bounds, P[i], P[i + 1], side, size, angle, Math.min(1, P[i][2] / sMax), dep, hash);
+            side = -side;                                                // alternate sides along the vine
+          }
         }
       }
     }
