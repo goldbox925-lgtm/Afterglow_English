@@ -523,7 +523,16 @@ Round 01's cuts are unchanged.
   the building's colour. It reads "AZURE · TRANSFORMING 6%" while the target has bloomed but is
   still transforming, and "THE CITY IS IN BLOOM" when all five are complete.
 - The story line after a flight out is "One light has returned. Another is waiting."
-- The hint "Double-tap ↑ to rise. Use ← → to steer." is shown during the launch and the reveal.
+- The hint "Fly to the beacon. Double-tap ↑ to rise; use ← → to steer." is shown during the launch and the reveal.
+- **Arriving at the target** (`trackTarget` in `js/garden/garden.js`). As she closes in on the next
+  target's doorway (from 320 m to 90 m), its beacon grows brighter (about 1.6× at 100 m, up to about
+  2.2× nearer), wider (12 → 17 m) and pulses faster, and its doorway glows even before she is lined
+  up with it. Within 170 m the prompt changes to "ENTER AZURE" / "Fly into the glowing doorway to
+  enter Azure. Use ← → and ↑ ↓ to line up." (it goes again past 200 m).
+- The entry starts only when she flies into the doorway's rectangle herself. Nothing moves her
+  there: the existing gentle line-up (a small turn and height assist when she is in front of it and
+  roughly heading for it) helps, but she has to keep flying toward it. Through it, the existing
+  1.1 s glide into the light and white fade open that building's scene with its own flower.
 
 *Audio-reactive awakening* (outside the building only, for 9 s after completion).
 - **Wave** (`uWave` in `livingWall`): a band of light rises up the facade, brightening the
@@ -548,3 +557,323 @@ it completes.
 - The atrium scene and the city scene are separate images, so the change between them is covered by
   a flash. Her position and speed are continuous.
 - The audio-reactive parts were tested with synthetic levels, not real music.
+
+**The 3D heroine in the Memory Garden (experiment, as built)** (`js/character/heroModel.js`,
+`js/shaders/hero3d.glsl.js`, assets in `assets/character/3d/`).
+
+*Scope.*
+- She is drawn in 3D only inside the Memory Garden scene: the phases `inside`, `leave` and the
+  flight out (`launch`).
+- In the city (Round 01, and Round 02 between buildings) she is the original pose images. The
+  scene changes are covered by the existing white fades, so the swap is never seen.
+- The flight physics, controls, camera, flower and shaders are unchanged. The only movement change
+  is a new, opt-in impulse (below).
+
+*Assets.* The two Blender exports share one rig:
+- `Afterglow_Animated.glb`: the mesh (49 080 vertices, 31 030 triangles), a 24-joint skin, one
+  JPEG texture, and the clips Flight, Idle_Float and Idle_Float.001.
+- `Afterglow_Flower_Reaction.glb`: only its clip Flower_Reaction is read. Its channels are mapped
+  onto the first file's skeleton by joint name, and the loader checks that the joint lists match.
+
+One mesh and one skeleton are drawn, never two characters.
+
+*What the clips contain* (checked in the GLBs and in the source `.blend` files):
+
+| Clip | Length | Bones that move | Notes |
+|---|---|---|---|
+| Flight | 4 s | arms, legs, head | eases from the rest pose into the flight pose over 0–2 s, then holds; the body stays upright in the export |
+| Idle_Float, Idle_Float.001 | 4 s | none | identical: the rest pose (arms out), plus a 0.2 m bob on the Armature node (a seamless loop) |
+| Flower_Reaction | 1.667 s | spine, head, arms, right shoulder | starts from the rest pose, ends elsewhere |
+
+The Armature node's bob is played on one continuous clock, separately from the bones, so
+cross-fades never make her dip. The reaction file's own root channels are ignored.
+
+*Rendering.*
+- **Mesh:** a `p5.Geometry` drawn with `p.model()` and a `p.createShader()` program in the garden
+  scene's framebuffer. It writes depth, so petals, planters and glass sort correctly around her.
+- **Skinning:** on the GPU. p5 1.11 has no custom vertex attributes, so each of the four influences
+  is packed as `joint + weight × 0.999` into the vec4 colour channel. That is the same packed-data
+  channel the city meshes use.
+- **Joint matrices:** 24 matrices sent as 72 `vec4` rows.
+- **Light:** lavender ambient, a warm key light from the flower's heart in its palette (stronger as
+  she comes close), and a soft rim.
+- **Texture:** resized to 2048² and mipmapped.
+
+
+*Scale.* The rig is drawn ×3.3 (about 5.6 m, three times the earlier ×1.1). This is visual only: the
+flight speed, the collision radius and the interaction distances are unchanged. The open flower
+stays wider than she is. The flight-out camera pulls back by `min(1.9, √(scale/1.1))`.
+
+*Garden camera framing for her size* (`gardenScene.js camera()`, fed by `garden.js heroTick`).
+- Horizontal, her body reaches about 5 m out from her head, and her head flies on a ring of about
+  4.9 m round the flower. A narrow window could not hold that: on a 536 px wide pane she was cut in
+  half by the frame's edge whenever she flew round to the side.
+- While she is inside, the garden passes the camera her body's centre (`AG.HeroModel.centre`) and
+  reach (`reach()`, 0.88 × scale ≈ 2.9 m). The camera then stands back far enough for the ring plus
+  her body (`fitW`), never past 20 m (inside the glass).
+- On a screen still too narrow for that, the view slides sideways towards her, eased over about
+  0.4 s. It stops before the flower's heart comes nearer than 2.6 m to the frame's edge.
+- On a wide screen (1280×720) nothing changes: the camera stays at 15.5 m, with no slide.
+- The flight-out camera (`cam.eye`) is unaffected, and the slide is off while it runs.
+- Measured: at 1280×720, distance 15.5 m and slide 0. At 536×600, 20 m and 1.1 m. At 375×812,
+  20 m and 1.8 m. Those were measured with a 3.4 m margin. The margin was then eased to 2.6 m, which
+  allows up to about 2.5 m of slide on 375×812; that has not been re-measured.
+- On 375×812 at the 3.4 m margin, her head and body stayed in frame at the side of the ring, but
+  her legs reached past the edge.
+
+*Clip check, repeated* (Python, read straight from both GLBs):
+- `Idle_Float` and `Idle_Float.001` are byte-identical: the bob only, with no bone motion.
+  `Idle_Float` is used.
+- `Flower_Reaction`'s root channel is a constant identity rotation, so ignoring it changes nothing.
+- The two files' Armature offsets differ (−1.73 vs −0.85). That does not matter, because only the
+  reaction's bone channels are taken from the second file.
+- `Ascend`, `Rest` and the empty `baselayer` clips are not loaded.
+
+*Sequence* (`AG.HeroModel.update`, driven from `AG.Garden.update`, so Pause holds the pose):
+
+| State | Clip | When | Cross-fade in |
+|---|---|---|---|
+| arrive | Idle_Float (its bob) | entering a garden, for 1.6 s, under the white fade-in | none |
+| flight | Flight, played once, then held at its last frame | after arrive (or at once if the flight out begins) | 0.5 s |
+| react | Flower_Reaction, once | the first time this building's flower reaches `R2.BLOOM_DONE` | 0.5 s, then 0.9 s back to the held Flight pose |
+
+- **Breath.** During arrive a procedural sigh lifts the chest and shoulders (Spine01, Spine, neck,
+  both shoulders), rising and settling once. Later a faint 4.5 s breath continues in the held pose.
+  It is off during the reaction. There is no breath clip; this is bone rotation on top of the clip.
+- **Horizontal flight.** The exported Flight keeps the body upright; only the source
+  `Idle_Float.blend` tilts it 77° forward. So the 77° tilt is rebuilt in the model matrix and eased
+  in with Flight's own 0–2 s progress, so pose and tilt arrive together. In the held pose a slow
+  pitch/roll sway and Idle_Float's bob keep her floating. She faces her direction of travel and
+  banks on turns.
+- Movement changes never restart Flight: once held, it stays held.
+- **No clipping.** With the body horizontal, the model is drawn so her head, not her hips, sits at
+  the controller point (`HEAD_BACK`); the body trails behind it. Hovering by the open flower, the
+  head keeps a clear gap from the petals.
+- **Reaction.** It starts from the held Flight pose (the tilt fades to upright with it) and its fast
+  first keys are covered by the 0.5 s fade. Its upward lift is `AG.Flight.gardenImpulse(1.6, 1.8)`:
+  the garden's arrive target rises and settles in a smooth bump. The skeleton's root is never moved.
+  The per-building flag is `site.reacted`, cleared by Replay. Rest and Ascend are not used.
+
+*Loading and fallback.*
+- The GLBs are fetched when Round 02 starts (`AG.Garden.start`), never in Round 01.
+- Whether a visit uses 3D is decided when she enters a garden. If the model is not ready yet, that
+  visit keeps the images. A load error keeps the images. `?hero=2d` turns the 3D heroine off.
+- `AG.HeroModel.debug()` reports the state, the transitions and the asset info.
+
+*Known limits.*
+- Idle_Float and Idle_Float.001 have no bone motion in the export, so only their bob is used.
+- The horizontal tilt is procedural (see above). A re-export of Flight with the hips rotated would
+  let `FLIGHT_TILT` in `js/character/heroModel.js` drop to 0.
+
+**Garden flight, city landmarks and navigation (polish pass, as built).**
+
+*Controls (Round 02).*
+- **In the garden:** ← → fly round the flower, true to the view; release them and she glides to a
+  stop. A tap of ↑ lifts her; a double tap lifts her more; hold ↑ to climb or ↓ to descend. The
+  mouse belongs to the flower (click the heart, drag outward) and to the camera (drag elsewhere,
+  wheel).
+- **In the city:** ← → steer. Tap or double-tap ↑ to rise; ↓ descends. To enter a building, fly into
+  its glowing doorway yourself. Nothing flies her there.
+
+*Smooth flight round the flower* (`gardenUpdate` in `js/core/flight.js`, garden mode only). Measured
+with fixed frame steps over the same ← / release / → / reversal sequence, the jerk had three causes:
+- **Heading.** She faced her velocity above 0.35 m/s and the flower below it, a hard switch. That
+  swung her up to 90° in a few frames (up to 7–30 rad/s), which looks harsh on a 5.6 m body. Now the
+  two directions are blended continuously by speed. A critically damped spring (ω 6.5/s, at most
+  2.6 rad/s) turns her, sub-stepped with the path.
+- **Orbit target.** It jumped to full orbit speed on a press and froze on a release. Now its angular
+  velocity eases in and out (`G.azVel`, frame-rate independent), so she accelerates and decelerates.
+- **Held boost.** The city's held-arrow boost (+55 %) asked for about 46 m/s² on the 4.9 m ring,
+  beyond the 26 m/s² steering limit. She drifted out and swung back. In the garden the boost is now
+  +15 %.
+- Her nose-up / nose-down while climbing is eased in `js/character/heroModel.js` (it followed the
+  vertical speed instantly).
+
+Results at 30, 60 and 144 fps were the same:
+
+| | Before | After |
+|---|---|---|
+| Peak turn rate | 7.4–30 rad/s | 2.6 rad/s |
+| Turn acceleration (99th percentile) | 134–305 rad/s² | about 20 rad/s² |
+| Peak jerk | 546–9128 m/s³ | about 96 m/s³ |
+
+The game's speed is unchanged, apart from the held boost above.
+
+*Her size.* The 3D heroine is ×3.3 (about 5.6 m, 3× the first build). The image heroine (the
+fallback when the model is not loaded yet, or `?hero=2d`) is now drawn 3× in the garden too: the
+`k` size multiplier in `R.drawCharacterWith`, which only the garden passes. Speed, collision and
+interaction distances are unchanged.
+
+*Completed buildings as landmarks.*
+- **The rooftop flower** is 1.6× larger. Its open crown reaches a little past the roof's edge, as in
+  the Azure concept art. Its base stays on the roof and the petals above it.
+- **A glow crown** in the flower's colours surrounds it (`living.js`). It is depth-tested, so a
+  building in front hides it, and its size never drops below 3 % (inner) / 6 % (outer) of the
+  distance, so it reads across the city.
+- **The completed building's beacon** is a steady column (0.5–1.0 strength, 7–12 m wide). The next
+  target's beacon is the pulsing, brighter and wider one (12–17 m). Far away every column keeps a
+  readable width: about 1 % of the distance, or 1.5 % for the target.
+- **Markers in the building's colour** (`#landmarks`, `landmarkMarks` in `js/ui/ui.js`):
+  - off screen: a dot with a pointer at the screen edge;
+  - on screen but behind other buildings: a ring on the flower;
+  - in plain sight: none.
+  
+  Occlusion is a segment test against the city's boxes about 8 times a second; the building itself
+  does not count. A marker never sits on the target's edge arrow.
+
+*Finding the next building.*
+- **Order.** The next target is the nearest building not yet bloomed. With seed 698426 the legs are
+  297–595 m (about 15–30 s at cruise speed). The selection is unchanged because it already keeps the
+  route short.
+- **Reveal.** After the flight out, the reveal shot frames the completed flower, then the look is
+  drawn toward the target's beacon.
+- **HUD and trail.** The HUD reads "NEXT: AURORA · 460 m" (live), and a short trail of light fades
+  out toward the target.
+- **Edge arrow and ring.** The arrow and its ring are in the target's colour. The ring now also
+  marks the target's doorway when it is on screen but hidden behind buildings.
+- **Arrival.** On approach the entry prompt shows (see *Arriving at the target*). Inside a building
+  the HUD objective reads "AURORA · INSIDE" (it used to compute a distance from garden coordinates).
+- **Finale.** When all five are complete the target guidance gives way to "THE CITY IS IN BLOOM".
+
+*Audio-reactive effects* (the existing analyser and the AUDIO REACTIVITY toggle; no microphone, no
+second soundtrack):
+- **Facade wave.** The completion wave plays for 9 s, as before. Afterwards a restrained wave climbs
+  the completed facade every 14 s. Its strength is 0.16–0.47, from the music's mids, × the
+  ON/OFF fade.
+- **Sparkles.** Afterwards they come one or two at a time, only round the rooftop flower, on a
+  musical accent, at most every 1.4 s.
+- **Trail.** It shimmers with the treble, as before.
+
+With reactivity OFF all of these fade to nothing.
+
+*Tests (built-in browser, 1280×760 and 375×812, seed 698426).*
+- **Garden arrival.** The breath plays (1.6 s), then Flight eases into the held horizontal pose and
+  stays held while she hovers and orbits. The reaction plays once at full bloom.
+- **Orbit.** Both directions, stopping and reversing measured as in the table above. Screenshots
+  show a readable pose at 3D and image sizes.
+- **Landmarks.** Rose was viewed from 300–1000 m and from a street at 55 m. The flower and its crown
+  read at 600 m. When it was hidden, the HUD marker showed. Behind the camera it moved to the edge.
+- **Next building.** Rose's flight out led to the reveal, the trail, "NEXT: AURORA" and the
+  colour-matched arrow. The doorway ring appeared when Aurora was hidden. With only forward flight,
+  she entered Aurora at the prompt and Aurora's own scene opened (flower at 0, 3D heroine arriving).
+- **Audio.** The recurring wave reaches 0.157 with reactivity ON and 0 with it OFF. Sparkles were
+  born on accents with ON and none with OFF. These accents were synthetic: the test tab's analyser
+  read silence, since there was no click to start playback.
+- **Pause, replay, progress.**
+  - Pause froze her position, her heading and the clip.
+  - A flower left at 50 % is still 50 % on re-entry.
+  - Replay reset the buildings, the heroine and the markers.
+- **Round 01.** Stages 1–5 are unchanged; no markers or Round 02 colours appear.
+- **Narrow screen.** 375 px wide with no horizontal scroll; the HUD, the edge arrow and the marker
+  fit.
+- **Errors.** No console errors. The only harness error is the known `interactions.js` race of the
+  test's manual redraw, which also happens on the committed base.
+
+*Not verified.* A real phone, frame rate on slower GPUs, the music actually driving the sparkles
+(only synthetic accents were used), and every seed's building layout.
+
+*Re-test after the camera framing change (built-in browser, seed 195747; 536×600, 375×812 and
+1280×720).*
+- **Arrival.** Arrive, then Flight at 1.61 s, held. Orbiting ← and → never restarted a clip: the log
+  shows only the two entries.
+- **Reaction.**
+  - At full bloom, Flower_Reaction played once.
+  - She rose upright with her arms open, and her highest lift was 0.75 m, from the movement impulse.
+  - It went back to the held Flight pose at t = 4.
+  - The building then completed and the flight out began.
+- **Next building.**
+  - The HUD showed "NEXT: AURORA · 720 m", matching the measured 718 m to the doorway.
+  - The edge arrow was in Aurora's green, and Rose had its landmark marker.
+  - Placed 60 m in front of Aurora's doorway with no steering, she flew in herself after the prompt
+    "Fly into the glowing doorway to enter Aurora…". Aurora's scene opened with the flower at 0.
+- **Regressions.**
+  - Reactivity OFF faded to 0, and back ON returned to 1.
+  - Pause froze the clip and her position, and Play resumed.
+  - Round 01 after a reload: the garden is off, the 3D model was not loaded, no markers appeared,
+    and there were no errors.
+  - 375 px: no horizontal scroll.
+- **Progress across a page reload.** It is not kept, on the committed base either: the game has no
+  storage. Progress lasts for the session. Within it, a flower's bloom and the completed buildings
+  persist across visits.
+- **Route length.** The distance to the next building depends on the seed. This seed's first leg
+  is 720 m, where seed 698426's legs are 297–595 m.
+
+
+**3D flight feel (as built).** Garden and flight-out only. The city flight that Round 01 uses is
+untouched.
+
+*Turning* (`js/core/flight.js`, `yawSpring`). One critically damped heading spring now serves the
+orbit and the flight out. The flight out used to switch at a hard 0.35 m/s threshold.
+- The spring is sub-stepped at ≤ 1/120 s.
+- Its turn rate is capped at 2.6 rad/s, and its angular acceleration at 11 rad/s².
+- It brakes in time: its speed is limited to √(2·a·|error|), so the acceleration cap never makes it
+  overshoot.
+
+*Banking.* `F.bank` eases (rate 3) toward −yawRate × 0.16, capped at ±0.26 rad (14.9°), and back to
+level when the turn ends. A full-speed orbit holds about 12–15°. It is visual only: the collision
+sphere and the flight position never see it.
+
+*Orientation* (`js/character/heroModel.js`, `modelMatrix`).
+- The wanted rotation is built as a quaternion, Ry(yaw) · Rx(tilt + climb + sway) · Rz(bank + roll
+  sway).
+- The drawn orientation is slerped toward it with 1 − e^(−11·dt), the same at any frame rate.
+- Pause leaves it frozen: dt is accumulated in `update()` only.
+- The head-first offset uses the smoothed forward.
+
+*Weightless float.*
+- **Sources.** The Armature's bob plus slow, incommensurate sines: pitch and roll sway, and a small
+  whole-body lift of ±0.12 m. All of it is visual, outside the flight position and collision.
+- **Calm factor.** All of it is scaled by `calm`, which eases toward 1 − 0.75 × busy (rate 2.5).
+  `busy` comes from the turn rate, the change in speed and the vertical speed. Measured, it drops
+  to 0.26 while she is actively flown and returns to 0.97 as she glides.
+- **Reduced motion.** With `prefers-reduced-motion`, everything is scaled by a further 0.35.
+- **Clips.** The skeletal clips are not touched. Only the bob's root offset is scaled.
+
+*Camera anticipation* (`gardenScene.js camera()`).
+- **Lead.** The view leads her sideways velocity by 0.3 s, up to ±1.4 m.
+- **Height.** It follows her height by 30 % of the offset plus 0.12 × her vertical speed, within
+  −0.6 … +1.4 m.
+- **Easing.** Both are eased, at rates 2.5 and 2.
+- **Flower in frame.** The slide (lead plus the narrow-screen fit) never puts the flower's heart
+  nearer than 2.6 m to the frame's edge.
+- **Reduced motion and flight out.** Both effects are off with reduced motion, and while the
+  flight-out camera runs.
+
+*Wake* (`garden.js herWake`).
+- **Glints.** Small sprites are shed behind her body, at 0–14 a second by her speed (none below
+  1.5 m/s, all from 7 m/s), at most 24 alive.
+- **Look.** They live 0.7–1.2 s, drift back and up, and are coloured from the flower's heat colour
+  to lavender.
+- **Drawing.** They use the flower's own glow-sprite program, additive and depth-tested. There is
+  no new shader.
+- **Reduced motion.** A third as many, with no drift.
+- **Pause.** They freeze.
+
+*Measurements.* The simulation was run at fixed steps over the same input sequence: orbit ← 2.5 s,
+rest, → 2.5 s, rest, ← → reversals, ↑ held 1.5 s, rest, ↓ 1 s, rest.
+
+| | 30 fps | 60 fps | 144 fps |
+|---|---|---|---|
+| max turn rate (rad/s) | 2.60 | 2.60 | 2.60 |
+| max turn acceleration (rad/s², was p99 ≈ 20) | 11.0 | 11.0 | 11.0 |
+| max bank | 14.8° | 14.8° | 14.8° |
+| max jerk (m/s³) | 96 | 99 | 99 |
+| p99 acceleration (m/s²) | 21.6 | 21.9 | 22.0 |
+| ring error after the last release | 0 | 0 | 0 |
+
+- **Settling.** In each rest, the heading settles with at most one swing (turning back to face the
+  flower) and no oscillation.
+
+*Browser checks* (536×600, 375×812, desktop).
+- **Orbit.** The bank read −12.5 … +10.7°.
+- **Ascent.** The camera rise reached 0.85 m, and the lead reached 1.07 m.
+- **Flower position.** The flower's heart stayed between 0.50 and 0.56 of the width at 536 px, and
+  at 0.25 at 375 px.
+- **Wake.** Up to 6 glints in the orbit, 15 in the flight out.
+- **Animation.** The reaction played once (flight → react → flight).
+- **Flight out.** Her turn rate reached 0.83 rad/s and her bank 11.9°. She reached the city
+  normally.
+- **Frame cost.** 375×812 garden redraw on the CPU: 1.8 ms median, 2.2 ms p95.
+- **Round 01.** It runs with no garden, no model and no errors.
+- **Not verified.** Reduced motion was checked in code only: the pane could not emulate it. A real
+  phone was not tested, and neither was GPU time.

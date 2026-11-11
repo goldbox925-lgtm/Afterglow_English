@@ -264,6 +264,26 @@ AG.Flight = (function () {
   function setVel(v) { if (vel) vel.set(v[0], v[1], v[2]); F.vel = v.slice(); F.flySpeed = Math.hypot(v[0], v[2]); }
   /* metres of rise still to come (a city tap given at the end of the flight out is kept) */
   function carryLift(m) { if (m > 0) liftLeft += m; }
+  /* Round 02 (garden mode only): a short upward impulse of h metres over dur seconds */
+  function gardenImpulse(h, dur) { if (F.garden && !F.garden.launch) F.garden.impulse = { t: 0, h, dur }; }
+  /* Round 02 (garden and flight out): her heading turned toward wantYaw by a critically damped spring,
+     sub-stepped (n steps of h), its turn rate capped (YAW_W) and its angular acceleration capped
+     (YAW_A), so a turn starts, runs and settles smoothly at any frame rate. The spring's own pull is
+     limited to the speed it can still brake from (√(2·a·|error|)), so the cap never makes it overshoot. */
+  const YAW_OM = 6.5, YAW_W = 2.6, YAW_A = 11;
+  function yawSpring(G, wantYaw, n, h) {
+    for (let s = 0; s < n; s++) {
+      const dy = Math.atan2(Math.sin(wantYaw - F.yaw), Math.cos(wantYaw - F.yaw)), v = G.yawVel || 0;
+      const vCap = Math.min(YAW_W, Math.sqrt(2 * YAW_A * 0.85 * Math.abs(dy)));
+      let acc = YAW_OM * YAW_OM * dy - 2 * YAW_OM * v;
+      if (Math.abs(v) > vCap && v * dy > 0) acc = -Math.sign(v) * YAW_A;   // too fast to stop in time: brake
+      G.yawVel = U.clamp(v + U.clamp(acc, -YAW_A, YAW_A) * h, -YAW_W, YAW_W);
+      F.yaw += G.yawVel * h;
+    }
+    F.yawRate = G.yawVel;
+    // the visual bank: 8–15° into a turn (0.26 rad at most), eased back to level as the turn ends
+    F.bank = U.damp(F.bank, U.clamp(-F.yawRate * 0.16, -0.26, 0.26), 3, n * h);
+  }
 
   /* ROUND 02 · THE FLIGHT OUT (after a building's transformation, js/garden/garden.js). Still the
      garden mode (same state, same p5.Vector velocity, same sub-steps and keep-out sphere), with a
@@ -324,11 +344,10 @@ AG.Flight = (function () {
     F.pos = [pos.x, pos.y, pos.z]; F.vel = [vel.x, vel.y, vel.z];
     L.r = Math.hypot(pos.x - c[0], pos.z - c[2]); L.aimY = aimY;
     const hs = Math.hypot(vel.x, vel.z);
-    const prevYaw = F.yaw;
-    if (hs > 0.35) { const wantYaw = Math.atan2(vel.x, -vel.z), dy = Math.atan2(Math.sin(wantYaw - F.yaw), Math.cos(wantYaw - F.yaw)); F.yaw += dy * (1 - Math.exp(-14 * dt)); }
-    F.yawRate = dt > 0 ? (F.yaw - prevYaw) / dt : 0;
+    // she faces where she flies: the same capped spring as round the flower (no speed threshold)
+    if (hs > 1e-3) yawSpring(G, Math.atan2(vel.x, -vel.z), n, h);
+    else { F.yawRate = G.yawVel = U.damp(G.yawVel || 0, 0, 4, dt); F.bank = U.damp(F.bank, 0, 3, dt); }
     F.speed = hs; F.flySpeed = hs; F.vy = vel.y;
-    F.bank = U.damp(F.bank, U.clamp(-F.yawRate * 0.35, -0.4, 0.4), 4, dt);
     F.upright = U.damp(F.upright, 0, 2, dt);
     trailClock -= dt;
     if (trailClock <= 0) { trail.unshift(F.pos.slice()); trail.length = 24; trailClock = 0.05; }
@@ -341,9 +360,15 @@ AG.Flight = (function () {
     // (−sin az, 0, cos az); its sign against the camera's right vector says which way is "right".
     const steer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
     steerHeld = steer ? steerHeld + dt : 0;
-    const tighten = 1 + FC.turnTighten * U.smooth(0.4, 1.4, steerHeld);
+    // a held arrow speeds the orbit up a little (the city's +55 % would ask for more turning force than
+    // the steering has on this small ring: she would drift out and swing back, i.e. jerk)
+    const tighten = 1 + 0.15 * U.smooth(0.4, 1.4, steerHeld);
     const cr = G.camRight, side = cr ? Math.sign(-Math.sin(G.az) * cr[0] + Math.cos(G.az) * cr[2]) || 1 : 1;
-    G.az += steer * side * (G.orbitSpeed / G.ring) * tighten * dt;
+    // the ring point moves with an angular velocity that is eased in and out (frame-rate independent),
+    // so a press or a release never makes the target jump: smooth acceleration and deceleration
+    const wantW = steer * side * (G.orbitSpeed / G.ring) * tighten;
+    G.azVel = U.damp(G.azVel || 0, wantW, steer ? 3.0 : 2.2, dt);
+    G.az += G.azVel * dt;
     // ↑ / ↓: the city's taps and double-taps (detected in press()) as eased lifts, a hold as a climb
     if (pendingLift > 0) { gLift += pendingLift * ROOM; pendingLift = 0; F.lifts = (F.lifts || 0) + 1; }
     liftLeft = 0;
@@ -358,11 +383,15 @@ AG.Flight = (function () {
     F.steering = steer !== 0; F.boosting = false;
     // speed: fast while she is being flown, back to the slow settling cruise when released, eased
     // with the city's acceleration constant (1 − e^(−accel·dt))
-    const flown = steer !== 0 || Math.abs(G.vh) > 0.3;
+    const flown = steer !== 0 || Math.abs(G.azVel) > 0.15 || Math.abs(G.vh) > 0.3;
     G.speedNow = p.lerp(G.speedNow, flown ? G.orbitSpeed * tighten * 1.15 : G.cruise, 1 - Math.exp(-FC.accel * 2 * dt));
     const maxForce = p.map(G.speedNow, G.cruise, G.orbitSpeed, G.maxForce, G.fastMaxForce, true);
     gC.set(G.center[0], G.center[1] + 1.0, G.center[2]);
-    gTarget.set(G.center[0] + Math.cos(G.az) * G.ring, G.center[1] + G.h, G.center[2] + Math.sin(G.az) * G.ring);
+    // a magical impulse (the 3D heroine's flower reaction): the target rises and settles back as a
+    // smooth bump, so the same arrive steering carries her up and down again
+    let bump = 0;
+    if (G.impulse) { const I = G.impulse; I.t += dt; bump = I.t < I.dur ? I.h * Math.pow(Math.sin(Math.PI * I.t / I.dur), 2) : 0; if (I.t >= I.dur) G.impulse = null; }
+    gTarget.set(G.center[0] + Math.cos(G.az) * G.ring, G.center[1] + G.h + bump, G.center[2] + Math.sin(G.az) * G.ring);
     pos.set(F.pos[0], F.pos[1], F.pos[2]);
     const n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
     for (let s = 0; s < n; s++) {
@@ -384,15 +413,16 @@ AG.Flight = (function () {
       if (pos.y < G.center[1] + 0.5) { pos.y = G.center[1] + 0.5; if (vel.y < 0) vel.y = 0; }
     }
     F.pos = [pos.x, pos.y, pos.z]; F.vel = [vel.x, vel.y, vel.z];
-    // body: face where she glides; once slow, turn to face the flower (angles eased with p.lerp)
+    // body: face where she glides, blended CONTINUOUSLY toward the flower as she slows (no switch at
+    // a speed threshold), and turned by a critically damped spring with a capped turn rate, sub-stepped
+    // like the path, so starts, stops and reversals turn her smoothly at any frame rate
     const hs = Math.hypot(vel.x, vel.z);
-    const wantYaw = hs > 0.35 ? Math.atan2(vel.x, -vel.z) : Math.atan2(G.center[0] - pos.x, -(G.center[2] - pos.z));
-    const dy = Math.atan2(Math.sin(wantYaw - F.yaw), Math.cos(wantYaw - F.yaw));
-    const prevYaw = F.yaw;
-    F.yaw += p.lerp(0, dy, 1 - Math.exp(-(hs > 2 ? 14 : 4) * dt));   // flown fast she faces her way at once
-    F.yawRate = dt > 0 ? (F.yaw - prevYaw) / dt : 0;
+    const yawFlower = Math.atan2(G.center[0] - pos.x, -(G.center[2] - pos.z));
+    const yawVel = hs > 1e-3 ? Math.atan2(vel.x, -vel.z) : yawFlower;
+    const wv = U.smooth(0.25, 1.8, hs);
+    const wantYaw = yawFlower + wv * Math.atan2(Math.sin(yawVel - yawFlower), Math.cos(yawVel - yawFlower));
+    yawSpring(G, wantYaw, n, h);
     F.speed = hs; F.flySpeed = hs; F.vy = vel.y;
-    F.bank = U.damp(F.bank, U.clamp(-F.yawRate * 0.35, -0.4, 0.4), 4, dt);
     F.upright = U.damp(F.upright, 0, 2, dt);
     // arrived: close to the target and slow (with hysteresis, so it never flickers)
     const dT = p5.Vector.dist(pos, gTarget), sp = vel.mag();
@@ -579,5 +609,5 @@ AG.Flight = (function () {
     return best;
   }
 
-  return Object.assign(F, { PHASES, phaseK, build, reset, resetMotion, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight, press, enterGarden, exitGarden, setVel, carryLift });
+  return Object.assign(F, { PHASES, phaseK, build, reset, resetMotion, update, drift, state, trailPoints, cloud, segmentClear, clearance, heading, enterLight, press, enterGarden, exitGarden, setVel, carryLift, gardenImpulse });
 })();

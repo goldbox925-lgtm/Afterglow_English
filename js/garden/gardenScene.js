@@ -30,6 +30,7 @@ AG.GardenScene = {
     // (the game's garden flower is larger, 2.6, so it holds the atrium; the preview keeps 2)
     const flower = AG.BloomFlower.create(p, { center: [0, 0, 0], scale: (o && o.scale) || 2 });
     let mode = null, lastX = 0, lastY = 0;            // mode: 'flower' | 'orbit' | null
+    const RM = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)'); } catch (e) { return null; } })();
 
     function mesh(name, fill) { const B = new AG.GeometryBuilder(name); fill(B); return B.build(p)[0]; }   // each mesh fits one chunk
     const quadAt = (B, c, d) => {                       // one sprite / ribbon quad, corners ±1
@@ -87,10 +88,35 @@ AG.GardenScene = {
       const cp = Math.cos(cam.pitch);
       // on a narrow (portrait) screen the camera stands back so the open flower (≈ 4.6 m to each
       // side of its centre) still fits across; on wider screens cam.dist is used as it is
-      const aspect = p.width / p.height, dist = Math.max(Math.min(cam.dist, (cam.maxR || Infinity) / Math.max(cp, 0.2)), 5.2 / (Math.tan(cam.fov * Math.PI / 360) * aspect));
+      const aspect = p.width / p.height, ht = Math.tan(cam.fov * Math.PI / 360) * aspect;
+      let dist = Math.max(Math.min(cam.dist, (cam.maxR || Infinity) / Math.max(cp, 0.2)), 5.2 / ht);
+      // the 3D heroine (Round 02, cam.follow = { p: her body's centre, r: its reach }, set by
+      // js/garden/garden.js): she is large, so the camera stands back far enough for her whole ring
+      // (cam.fitW to each side) within the glass (≤ 20 m), and on a screen still too narrow for that
+      // it slides sideways towards her, never so far that the flower's heart comes nearer than 2.6 m to the frame's edge
+      const fo = cam.follow, right = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)];
+      if (fo && cam.fitW) dist = Math.max(dist, Math.min(20, cam.fitW / ht));
+      // ANTICIPATION (restrained): the view leads her a little along her sideways velocity (≤ 1.4 m,
+      // about 0.3 s ahead) and follows her height a little (−0.6 … +1.4 m), each eased, so turns and
+      // climbs are framed before she gets there. Off with reduced motion. The flower's heart always
+      // stays at least 2.6 m inside the frame's edge.
+      let want = 0, wantY = 0;
+      if (fo && !cam.eye) {
+        const halfW = dist * ht, lat = (fo.p[0] - cam.target[0]) * right[0] + (fo.p[2] - cam.target[2]) * right[2];
+        const over = Math.abs(lat) + fo.r + 0.6 - halfW, lim = Math.max(0, halfW - 2.6);
+        const still = RM && RM.matches, v = fo.v || [0, 0, 0];
+        const lead = still ? 0 : U.clamp((v[0] * right[0] + v[2] * right[2]) * 0.3, -1.4, 1.4);
+        want = U.clamp((over > 0 ? Math.sign(lat) * over : 0) + lead, -lim, lim);
+        wantY = still ? 0 : U.clamp((fo.p[1] - cam.target[1]) * 0.3 + v[1] * 0.12, -0.6, 1.4);
+      }
+      const dts = Math.min(0.1, (p.deltaTime || 16) / 1000);
+      view.pan = (view.pan || 0) + (want - (view.pan || 0)) * (1 - Math.exp(-2.5 * dts));
+      view.rise = (view.rise || 0) + (wantY - (view.rise || 0)) * (1 - Math.exp(-2 * dts));
+      view.target = [cam.target[0] + right[0] * view.pan, cam.target[1] + view.rise, cam.target[2] + right[2] * view.pan];
       // (cam.eye, when set, places the eye directly: the game's camera following her out, js/garden/garden.js)
-      view.eye = cam.eye ? cam.eye.slice() : [cam.target[0] + Math.sin(cam.yaw) * cp * dist, cam.target[1] + Math.sin(cam.pitch) * dist, cam.target[2] + Math.cos(cam.yaw) * cp * dist];
-      view.V = U.mat4.lookAt(view.eye, cam.target, [0, 1, 0]);
+      view.eye = cam.eye ? cam.eye.slice() : [view.target[0] + Math.sin(cam.yaw) * cp * dist, view.target[1] + Math.sin(cam.pitch) * dist, view.target[2] + Math.cos(cam.yaw) * cp * dist];
+      if (cam.eye) { view.pan = 0; view.rise = 0; view.target = cam.target.slice(); }
+      view.V = U.mat4.lookAt(view.eye, view.target, [0, 1, 0]);
       view.P = U.mat4.perspective(cam.fov * Math.PI / 180, p.width / p.height, 0.05, 300);
     }
     /* world → screen pixels */
@@ -101,7 +127,7 @@ AG.GardenScene = {
     }
     /* the picking ray through the pointer (p5.Vector) */
     function ray(mx, my) {
-      const eye = p.createVector(...view.eye), fwd = p5.Vector.sub(p.createVector(...cam.target), eye).normalize();
+      const eye = p.createVector(...view.eye), fwd = p5.Vector.sub(p.createVector(...(view.target || cam.target)), eye).normalize();
       const right = fwd.cross(p.createVector(0, 1, 0)).normalize(), up = right.cross(fwd).normalize();
       const th = Math.tan(cam.fov * Math.PI / 360), x = (2 * mx / p.width - 1) * th * (p.width / p.height), y = (1 - 2 * my / p.height) * th;
       return { ro: eye, rd: p5.Vector.add(fwd, p5.Vector.add(p5.Vector.mult(right, x), p5.Vector.mult(up, y))).normalize() };
@@ -158,15 +184,20 @@ AG.GardenScene = {
     /* ---------- frame ---------- */
     /* the camera as the city renderer's character drawing expects it (pos, basis, fov, matrices) */
     function camInfo() {
-      const V3 = U.v3, dir = V3.norm(V3.sub(cam.target, view.eye)), right = V3.norm(V3.cross(dir, [0, 1, 0])), up = V3.cross(right, dir);
-      return { pos: view.eye, target: cam.target, dir, right, up, fov: cam.fov, V: view.V, P: view.P };
+      const V3 = U.v3, tg = view.target || cam.target, dir = V3.norm(V3.sub(tg, view.eye)), right = V3.norm(V3.cross(dir, [0, 1, 0])), up = V3.cross(right, dir);
+      return { pos: view.eye, target: tg, dir, right, up, fov: cam.fov, V: view.V, P: view.P };
     }
     /* Round 02: her (o.CH, CharacterDirector's items), drawn by the city renderer's own character
        code with this scene's camera. Petals are translucent and drawn back to front without depth
        writes, so she is drawn before them when she is behind the flower and after them in front. */
     function drawHer(o) {
+      // the 3D heroine (js/character/heroModel.js), lit by this flower; the pose images otherwise
+      if (o && o.hero3d && o.herState) {
+        const H = flower.heart().c;
+        if (o.hero3d.draw({ V: view.V, P: view.P, eye: view.eye }, o.herState, { warm: flower.prox, key: [H[0], H[1] + 1.5, H[2]], col: flower.colors.heat })) return;
+      }
       if (!o || !o.CH || !AG.Renderer || !AG.Renderer.drawCharacterWith) return;
-      AG.Renderer.drawCharacterWith(camInfo(), o.CH, flower.t, { warm: flower.prox });
+      AG.Renderer.drawCharacterWith(camInfo(), o.CH, flower.t, { warm: flower.prox, k: o.herK || 1 });   // (herK: her garden size, the same as the 3D heroine's)
     }
 
     /* the flower itself (receptacle, stamens, sorted petals, glow sprites) into the framebuffer that is
@@ -283,6 +314,13 @@ AG.GardenScene = {
         p.blendMode(p.ADD); gl.depthMask(false);
         p.shader(SH.spr); common(SH.spr);
         SH.spr.setUniform('uKind', 0); SH.spr.setUniform('uSpr', env.spr); SH.spr.setUniform('uSprC', env.sprC);
+        p.model(sprGeo);
+      }
+      // Round 02: her wake (a few glints behind her, js/garden/garden.js), the same sprite program
+      if (o && o.herFx) {
+        p.blendMode(p.ADD); gl.enable(gl.DEPTH_TEST); gl.depthMask(false);
+        p.shader(SH.spr); common(SH.spr);
+        SH.spr.setUniform('uKind', 0); SH.spr.setUniform('uSpr', o.herFx.spr); SH.spr.setUniform('uSprC', o.herFx.sprC);
         p.model(sprGeo);
       }
       gl.depthMask(true); p.blendMode(p.BLEND);

@@ -84,10 +84,13 @@ AG.Gardens = (function () {
       seed: Math.floor(Math.abs(b.cx * 31.7 + b.cz * 11.3)) % 9973 + 3,
       flower: freshFlower(), told: freshTold(), surge: 0,
       exitSeq: null,          // the flight out after its transformation (js/garden/garden.js): null, 'pending', 'done', 'skip'
+      reacted: false,         // the 3D heroine's Flower_Reaction has played here (once per building)
       bloomed: false, completed: false, sinceBloom: 0, transform: 0, windows: 0,
       stage: { A: 0, B: 0, C: 0, D: 0, E: 0 },
-      // the giant flower's base on the top shaft's real roof, sized to that roof
-      rooftop: { center: [b.cx, top.y1 + lift, b.cz], scale: cfg.roof * (top.w + top.d) / 4 / 1.8 },
+      // the giant flower's base on the top shaft's real roof, sized to that roof: ×1.6 so its open crown
+      // reaches a little past the roof's edge (a city landmark, as in the Azure concept art); the base
+      // stays on the roof and the petals above it
+      rooftop: { center: [b.cx, top.y1 + lift, b.cz], scale: 1.6 * cfg.roof * (top.w + top.d) / 4 / 1.8 },
       living: null
     };
   }
@@ -96,7 +99,7 @@ AG.Gardens = (function () {
   /* a new story: every building back to its bud. The chosen doorways stay. */
   function resetAll() {
     for (const s of G.sites) {
-      s.flower = freshFlower(); s.told = freshTold(); s.surge = 0; s.exitSeq = null;
+      s.flower = freshFlower(); s.told = freshTold(); s.surge = 0; s.exitSeq = null; s.reacted = false;
       s.bloomed = false; s.completed = false; s.sinceBloom = 0; s.transform = 0; s.windows = 0;
       for (const k in s.stage) s.stage[k] = 0;
       if (AG.Living && s.living) AG.Living.release(s);

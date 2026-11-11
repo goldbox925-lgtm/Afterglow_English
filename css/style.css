@@ -291,14 +291,14 @@ body.ended #titleReveal { opacity: 0; transition: opacity 1.6s ease; }
 #stageCount i.on { border-color: transparent; box-shadow: 0 0 12px currentColor; background: currentColor; }
 #hintRing {
   position: fixed; left: 0; top: 0; width: 64px; height: 64px; margin: -32px; border-radius: 50%; z-index: 9; pointer-events: none;
-  border: 1.5px solid rgba(255, 210, 230, 0.75); box-shadow: 0 0 18px rgba(255, 120, 200, 0.5); opacity: 0; transition: opacity 0.8s;
+  border: 1.5px solid var(--hint-col, rgba(255, 210, 230, 0.75)); box-shadow: 0 0 18px var(--hint-col, rgba(255, 120, 200, 0.5)); opacity: 0; transition: opacity 0.8s;
   animation: hintPulse 1.6s ease-in-out infinite;
 }
 #hintRing.show { opacity: 1; }
 @keyframes hintPulse { 0%, 100% { transform: scale(0.85); } 50% { transform: scale(1.15); } }
 #hintArrow { position: fixed; left: 0; top: 0; width: 34px; height: 34px; margin: -17px; z-index: 9; pointer-events: none; opacity: 0; transition: opacity 0.8s; }
 #hintArrow.show { opacity: 0.9; }
-#hintArrow svg { width: 100%; height: 100%; fill: none; stroke: #ffd2e6; stroke-width: 2.2; filter: drop-shadow(0 0 6px rgba(255, 120, 200, 0.9)); }
+#hintArrow svg { width: 100%; height: 100%; fill: none; stroke: var(--hint-col, #ffd2e6); stroke-width: 2.2; filter: drop-shadow(0 0 6px var(--hint-col, rgba(255, 120, 200, 0.9))); }
 #ripples { position: fixed; inset: 0; z-index: 9; pointer-events: none; }
 #ripples span { position: absolute; width: 16px; height: 16px; margin: -8px; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.7); animation: ripple 0.9s ease-out forwards; }
 #ripples span.hit { border-color: rgba(255, 210, 160, 0.95); box-shadow: 0 0 16px rgba(255, 170, 90, 0.8); animation-duration: 1.4s; }
@@ -320,6 +320,15 @@ body.stage-find #stage canvas, body.stage-restore #stage canvas { cursor: crossh
 #thread line { stroke-width: 2px; stroke-linecap: round; filter: drop-shadow(0 0 6px currentColor) drop-shadow(0 0 2px #fff); }
 #thread.far line { stroke-dasharray: 3 7; opacity: 0.55; }
 body.cinematic #hintRing, body.cinematic #hintArrow { opacity: 0 !important; }
+/* Round 02: the completed buildings' landmark markers (js/ui/ui.js landmarkMarks) */
+#landmarks { position: fixed; inset: 0; z-index: 9; pointer-events: none; overflow: hidden; }
+#landmarks .lm { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity 0.6s; }
+#landmarks .lm.show { opacity: 0.85; }
+#landmarks .lm i { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--c); box-shadow: 0 0 8px var(--c); }
+#landmarks .lm.edge i { background: var(--c); }
+#landmarks .lm b { display: none; position: absolute; left: 8px; top: -5px; width: 0; height: 0; border-left: 7px solid var(--c); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+#landmarks .lm.edge b { display: block; }
+body.cinematic #landmarks, body.garden-inside #landmarks { opacity: 0; }
 #timeText { min-width: 9em; text-align: right; letter-spacing: 0.12em; }
 body.entered:not(.flying) #stage canvas { cursor: crosshair; }
 

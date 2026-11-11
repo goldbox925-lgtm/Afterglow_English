@@ -355,10 +355,12 @@ AG.Renderer = (function () {
     }
     // breathing: vertical only, anchored at the ground; never a stretch of limbs
     const sy = 1 + (item.breath || 0) * scale;
-    const H = subjH * sy, W = subjW;
+    // item.k: a size multiplier (only the Memory Garden passes one; Round 01 never does), about her centre
+    const k = item.k || 1;
+    const H = subjH * sy * k, W = subjW * k;
     const margin = 0.22;
     let center = item.anchorPos.slice();
-    if (meta.anchor === 'bottom') center = V.add(center, V.scale(up, H / 2));
+    if (meta.anchor === 'bottom') center = V.add(center, V.scale(up, subjH * sy / 2));
     center = V.add(center, [0, item.bob || 0, 0]);
     if (item.shake) center = V.add(center, [(Math.random() - 0.5) * item.shake, (Math.random() - 0.5) * item.shake * 0.5, 0]);
     const bw = P.bbox.u1 - P.bbox.u0, bh = P.bbox.v1 - P.bbox.v0;
@@ -670,7 +672,7 @@ AG.Renderer = (function () {
       fogDensity: 0, fogFalloff: 0.002, fogLow: [0, 0, 0], fogHigh: [0, 0, 0] };
     const F = { t, at: t, view: cam.V, proj: cam.P, cam };
     // her aura sprite at a third: against the garden's plain backdrop its square edge would show
-    const items = CH.items.map((it) => Object.assign({}, it, { aura: (it.aura || 0) * 0.33 }));
+    const items = CH.items.map((it) => Object.assign({}, it, { aura: (it.aura || 0) * 0.33, k: (light && light.k) || 1 }));
     gl.depthMask(false);
     drawCharacter(F, S, cam, Object.assign({}, CH, { items }));
     p.blendMode(p.BLEND);

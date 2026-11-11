@@ -92,7 +92,8 @@ AG.Living = (function () {
       seed, faces, rise, spark, sparkSpr: new Float32Array(64 * 4), sparkSprC: new Float32Array(64 * 4), lastAcc: 0, sparkCd: 0, C: colours(site.cfg),
       facade: { walls: FW.build(p), vines: FV.build(p), H: FH, grid: [6.0, 4.4], origin: door.slice(), reach: Math.hypot(sx, sz) * 2 + FH },
       roof, roofY: site.rooftop.center[1], roofScale: site.rooftop.scale,
-      spr: new Float32Array(64 * 4), sprC: new Float32Array(64 * 4), pv: p.createVector(0, 0, 0), ph: p.createVector(0, 0, 0)
+      spr: new Float32Array(64 * 4), sprC: new Float32Array(64 * 4), pv: p.createVector(0, 0, 0), ph: p.createVector(0, 0, 0),
+      halo: new Float32Array(64 * 4), haloC: new Float32Array(64 * 4)     // the landmark's glow crown (slots 0–1)
     };
     AG.U.emit('livingBuilt', { seed, site: site.id });
   }
@@ -153,21 +154,30 @@ AG.Living = (function () {
      sparkles answer the music's accents round the building. Both read AG.Reactivity, whose values
      already include the AUDIO REACTIVITY ON/OFF fade: with it OFF the wave still climbs (at its
      plain strength) and no sparkle is born. Nothing here adds a sound source. */
-  const SEQ_T = 9;
+  const SEQ_T = 9, WAVE_P = 14;
   function awakening(site, B, dt, inside) {
     const R = AG.Reactivity, T = site.surge, on = site.completed && T > 0 && T < SEQ_T && !inside;
     B.wave = on ? [(B.facade.H + 8) * U.smooth(0.1, 3.6, T) - 4, U.smooth(0, 0.35, T) * (1 - U.smooth(3.3, 4.6, T)) * (0.8 + 0.6 * R.drive.mid)] : [0, 0];
+    // AFTERWARDS, while it stands complete: a restrained wave climbs the facade every ~14 s, its strength
+    // from the music's mids and × R.amount, so it fades away with AUDIO REACTIVITY OFF
+    const after = site.completed && !inside && T >= SEQ_T;
+    if (after) {
+      const u = (site.sinceBloom % WAVE_P) / 4.2;
+      if (u < 1) B.wave = [(B.facade.H + 8) * U.smooth(0, 1, u) - 4, Math.sin(Math.PI * u) * 0.35 * (0.45 + 0.9 * R.drive.mid) * R.amount];
+    }
     // sparkles: born on a RISING accent (an onset), a few at a time, short-lived, never near her
     const acc = R.accent || 0;
     B.sparkCd = Math.max(0, B.sparkCd - dt);
-    if (on && dt > 0 && acc > 0.42 && acc - B.lastAcc > 0.02 && B.sparkCd <= 0) {
-      B.sparkCd = 0.24;
-      const her = AG.Flight.pos, C = B.C, n = 2 + Math.floor(acc * 3);
+    // (afterwards: occasional, one or two at a time, only round the rooftop flower)
+    const roofOnly = !on && after;
+    if ((on || roofOnly) && dt > 0 && acc > 0.42 && acc - B.lastAcc > 0.02 && B.sparkCd <= 0) {
+      B.sparkCd = roofOnly ? 1.4 : 0.24;
+      const her = AG.Flight.pos, C = B.C, n = roofOnly ? 1 + Math.floor(acc * 1.6) : 2 + Math.floor(acc * 3);
       for (let j = 0, made = 0; j < 16 && made < n; j++) {
         const m = B.spark[j];
         if (m.life > 0) continue;
         const f = B.faces[Math.floor(p.random(B.faces.length))];
-        const q = p.random() < 0.3
+        const q = roofOnly || p.random() < 0.3
           ? V3.add(B.roof.center, [p.random(-1, 1) * B.roofScale, p.random(0.2, 1.1) * B.roofScale, p.random(-1, 1) * B.roofScale])
           : V3.add(V3.add(V3.add(f.O, V3.scale(f.t, p.random(1, f.w - 1))), [0, p.random(2, f.h), 0]), V3.scale(f.n, p.random(1.5, 4)));
         if (V3.len(V3.sub(q, her)) < 14) continue;
@@ -276,7 +286,21 @@ AG.Living = (function () {
       drawSet(s, vw);
       if (sc && (s.stage.C > 0.001 || s.stage.D > 0.001)) sc.drawSprites(s.living.spr, s.living.sprC, vw, s.living.roof.t);
       p.blendMode(p.BLEND);
-      if (s.stage.D > 0.001 && sc) sc.drawFlowerBody(s.living.roof, vw);
+      if (s.stage.D > 0.001 && sc) {
+        sc.drawFlowerBody(s.living.roof, vw);
+        // THE LANDMARK'S GLOW CROWN: a soft halo of the flower's colours round it, depth-tested (a
+        // building in front hides it, the beacon above still shows), never smaller on screen than about
+        // 3 % of the distance, so the flower reads from across the city; quieter close up
+        const B = s.living, rf = B.roof, c = V3.add(rf.center, [0, rf.scale * 0.55, 0]), d = V3.len(V3.sub(c, vw.eye));
+        const far = U.smooth(80, 420, d), br = 0.85 + 0.15 * Math.sin(s.sinceBloom * 0.9);
+        const a = s.stage.D * (0.18 + 0.42 * far) * br, C = B.C, k = (q) => [p.red(q) / 255, p.green(q) / 255, p.blue(q) / 255];
+        const cA = k(p.lerpColor(C.pink, C.gold, 0.3)), cB = k(p.lerpColor(C.pink, C.lav, 0.5));
+        B.halo.set([c[0], c[1], c[2], Math.max(rf.scale * 2.0, d * 0.03)], 0); B.haloC.set([cA[0], cA[1], cA[2], a], 0);
+        B.halo.set([c[0], c[1], c[2], Math.max(rf.scale * 3.4, d * 0.06)], 4); B.haloC.set([cB[0], cB[1], cB[2], a * 0.45], 4);
+        gl.enable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.ADD);
+        sc.drawSprites(B.halo, B.haloC, vw, rf.t);
+        p.blendMode(p.BLEND);
+      }
       if (sc && s.living.sparks) { gl.enable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.ADD); sc.drawSprites(s.living.sparkSpr, s.living.sparkSprC, vw, s.living.roof.t); }
       gl.enable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.BLEND);
     }

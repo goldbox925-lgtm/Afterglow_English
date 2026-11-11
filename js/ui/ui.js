@@ -214,7 +214,7 @@ AG.UI = (function () {
     const def = C.states.find((s) => s.id === st);
     if (st === 'AFTERGLOW' && AG.Garden && AG.Garden.isActive()) {
       const hint = AG.Garden.hintText();                               // the flight out of a transformed building
-      if (hint) return { title: 'FLY ON', text: hint, keep: true };
+      if (hint) return { title: AG.Garden.hintTitle ? AG.Garden.hintTitle() : 'FLY ON', text: hint, keep: true };
       if (AG.Gardens.allComplete()) return null;                       // free flight: nothing left to ask of her
       return AG.Garden.phase === 'approach' ? { title: 'THE MEMORY GARDEN', text: 'A doorway of light has opened. Fly through it · ← → steer · tap ↑ to rise · ↓ to descend.' } : null;
     }
@@ -229,6 +229,43 @@ AG.UI = (function () {
     if (st === 'AWAKENING') return { title: 'WAKE THE CITY', text: def.prompt };
     if (st === 'RECLAIMING_SELF') return { title: 'CONNECT THE BUILDINGS', text: def.prompt };
     return { title: def.title, text: def.prompt };
+  }
+
+  /* Round 02: a small marker in each completed building's colour for its rooftop flower, at the screen
+     edge (pointing to it) while it is off screen, or a ring on it while buildings hide it; none while it
+     is in plain sight. (Round 01 passes an empty list.) */
+  let lastHintCol = '';
+  const lmEls = [];
+  function edgeAt(nx, ny, m) {
+    const W = window.innerWidth, H = window.innerHeight, a = Math.atan2(-ny, nx);
+    const k = Math.min((W / 2 - m) / Math.max(Math.abs(Math.cos(a)), 1e-3), (H / 2 - m) / Math.max(Math.abs(Math.sin(a)), 1e-3));
+    return { x: W / 2 + Math.cos(a) * k, y: H / 2 + Math.sin(a) * k, a };
+  }
+  function landmarkMarks(list, avoid) {
+    const box = $('landmarks'); if (!box) return;
+    while (lmEls.length < list.length) { const e = document.createElement('div'); e.className = 'lm'; e.innerHTML = '<b></b><i></i>'; box.appendChild(e); lmEls.push(e); }
+    const cam = AG.Camera.state, IA = AG.Interactions, V = U.v3, placed = [];
+    lmEls.forEach((e, i) => {
+      const L = list[i]; let pos = null, edge = false;
+      if (L) {
+        const sp = IA.project(L.pos, cam);
+        if (!sp) { const right = V.cross(V.norm(V.sub(cam.target, cam.pos)), [0, 1, 0]); pos = edgeAt(V.dot(V.sub(L.pos, cam.pos), right) >= 0 ? 1 : -1, 0, 30); edge = true; }
+        else if (!sp.on) { pos = edgeAt(sp.nx, sp.ny, 30); edge = true; }
+        else if (L.hidden) pos = { x: sp.x, y: sp.y, a: 0 };
+        // never on top of the target's edge arrow (or of an earlier marker): moved along the edge
+        for (let tries = 0; pos && edge && tries < 4; tries++) {
+          const hit = (q) => q && Math.hypot(q.x - pos.x, q.y - pos.y) < 30;
+          if (!hit(avoid) && !placed.some(hit)) break;
+          const side = Math.abs(Math.cos(pos.a)) > Math.abs(Math.sin(pos.a));
+          if (side) pos.y = Math.min(window.innerHeight - 30, pos.y + 30); else pos.x = Math.min(window.innerWidth - 30, pos.x + 30);
+        }
+        if (pos) placed.push(pos);
+      }
+      e.classList.toggle('show', !!pos); e.classList.toggle('edge', edge);
+      if (!pos) return;
+      if (e.dataset.c !== L.col) { e.dataset.c = L.col; e.style.setProperty('--c', L.col); }
+      e.style.transform = `translate(${pos.x.toFixed(1)}px, ${pos.y.toFixed(1)}px) rotate(${pos.a.toFixed(3)}rad)`;
+    });
   }
 
   function update(dt, S) {
@@ -262,7 +299,7 @@ AG.UI = (function () {
     const countHTML = total ? Array.from({ length: total }, (_, i) => `<i class="${i < done ? 'on' : ''}"></i>`).join('') : '';
     if ($('stageCount').innerHTML !== countHTML) $('stageCount').innerHTML = countHTML;
     // ---- hints: a ring on the target, an arrow toward it when off screen ----
-    let ring = null, arrow = null;
+    let ring = null, arrow = null, hintCol = '';
     if (st === 'NUMBNESS' && !F.cinematic) {
       const b = IA.beaconScreen;
       if (b && b.on && b.visible) ring = b;
@@ -274,6 +311,8 @@ AG.UI = (function () {
       const P = AG.Garden.target(), cam = AG.Camera.state, sp = IA.project(P, cam);
       if (!sp) { const V = U.v3, right = V.cross(V.norm(V.sub(cam.target, cam.pos)), [0, 1, 0]); arrow = { nx: V.dot(V.sub(P, cam.pos), right) >= 0 ? 1 : -1, ny: 0 }; }
       else if (!sp.on) arrow = sp;
+      else if (!F.cinematic && AG.Garden.targetHidden()) ring = sp;    // on screen but behind buildings: a ring over its doorway
+      hintCol = AG.Garden.goalColor();                                  // both in the target building's colour
     }
     else if (st === 'AFTERGLOW' && !F.cinematic && !AG.Flight.finale && AG.Fragments && AG.Fragments.active()) {
       // stage 05: the existing edge arrow points to the revealed fragment while it is off screen
@@ -282,6 +321,7 @@ AG.UI = (function () {
       else if (!sp.on) arrow = sp;
     }
     const hr = $('hintRing');
+    if (hintCol !== lastHintCol) { lastHintCol = hintCol; hr.style.setProperty('--hint-col', hintCol); $('hintArrow').style.setProperty('--hint-col', hintCol); }
     hr.classList.toggle('show', !!ring);
     if (ring) { hr.style.left = ring.x + 'px'; hr.style.top = ring.y + 'px'; }
     const ha = $('hintArrow');
@@ -296,6 +336,7 @@ AG.UI = (function () {
       ha.style.left = (W / 2 + Math.cos(a) * k) + 'px'; ha.style.top = (H / 2 + Math.sin(a) * k) + 'px';
       ha.style.transform = `rotate(${a}rad)`;
     }
+    landmarkMarks(st === 'AFTERGLOW' && !F.cinematic && AG.Garden && AG.Garden.isActive() ? AG.Garden.landmarks() : [], arrow ? { x: parseFloat(ha.style.left), y: parseFloat(ha.style.top) } : null);
     // ---- press-and-hold charge on a fragile light ----
     const hold = $('holdRing');
     if (IA.charge && st === 'FRACTURE') {

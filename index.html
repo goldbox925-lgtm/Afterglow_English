@@ -7,7 +7,7 @@
   <meta name="description" content="An interactive story about a broken heart, a city restored, and rebirth.">
   <meta name="theme-color" content="#05060c">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2305060c'/%3E%3Crect x='7' y='9' width='5' height='17' fill='%23ff2a9e'/%3E%3Crect x='14' y='4' width='5' height='22' fill='%2322e8ff'/%3E%3Crect x='21' y='12' width='4' height='14' fill='%238b45ff'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css?v=r2x4">
+  <link rel="stylesheet" href="css/style.css?v=r2h1">
 </head>
 <body>
   <div id="stage"></div>
@@ -68,6 +68,7 @@
   </section>
   <div id="hintRing"></div>
   <div id="hintArrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4l8 8-8 8"/></svg></div>
+  <div id="landmarks" aria-hidden="true"></div>
   <div id="ripples" aria-hidden="true"></div>
   <svg id="thread" aria-hidden="true"><line id="threadLine" x1="0" y1="0" x2="0" y2="0"/></svg>
 
@@ -178,6 +179,7 @@
   <script src="js/shaders/fx.glsl.js?v=20261022asc"></script>
   <script src="js/shaders/post.glsl.js?v=20261022asc"></script>
   <script src="js/shaders/character.glsl.js?v=20261110t10"></script>
+  <script src="js/shaders/hero3d.glsl.js?v=r2h1"></script>
   <script src="js/shaders/screens.glsl.js?v=20261110w1"></script>
   <script src="js/shaders/network.glsl.js?v=20261110p4hud"></script>
   <script src="js/city/geometryBuilder.js?v=20261022asc"></script>
@@ -190,8 +192,9 @@
   <script src="js/core/restoration.js?v=20261022asc"></script>
   <script src="js/core/collision.js?v=20261111c2"></script>
   <script src="js/core/fragments.js?v=20261110p7"></script>
-  <script src="js/core/flight.js?v=r2x4"></script>
+  <script src="js/core/flight.js?v=r2h4"></script>
   <script src="js/character/characterDirector.js?v=r2c1"></script>
+  <script src="js/character/heroModel.js?v=r2h7"></script>
   <script src="js/fx/screenWords.js?v=20261110b1"></script>
   <script src="js/fx/lightParticles.js?v=20261110t10"></script>
   <script src="js/core/interactions.js?v=20261110phase3f"></script>
@@ -206,18 +209,18 @@
   <script src="js/shaders/portal.glsl.js?v=r2k1"></script>
   <script src="js/shaders/flower.glsl.js?v=r2k1"></script>
   <script src="js/garden/flower.js?v=r2k1"></script>
-  <script src="js/garden/gardenScene.js?v=r2x4"></script>
+  <script src="js/garden/gardenScene.js?v=r2h5"></script>
   <script src="js/garden/r2Layer.js?v=r2k2"></script>
-  <script src="js/garden/gardens.js?v=r2x4"></script>
+  <script src="js/garden/gardens.js?v=r2h2"></script>
   <script src="js/garden/botanical.js?v=r2k1"></script>
   <script src="js/garden/atrium.js?v=r2x4"></script>
-  <script src="js/garden/garden.js?v=r2x4"></script>
+  <script src="js/garden/garden.js?v=r2h11"></script>
   <script src="js/garden/vines.js?v=r2h1"></script>
-  <script src="js/garden/living.js?v=r2x4"></script>
+  <script src="js/garden/living.js?v=r2h1"></script>
   <script src="js/garden/round2.js?v=r2x4"></script>
   <script src="js/garden/r2Hud.js?v=r2x4"></script>
-  <script src="js/render/renderer.js?v=r2n1"></script>
-  <script src="js/ui/ui.js?v=r2x4"></script>
+  <script src="js/render/renderer.js?v=r2h1"></script>
+  <script src="js/ui/ui.js?v=r2h6"></script>
   <script src="js/sketch.js?v=r2n1"></script>
 </body>
 </html>
