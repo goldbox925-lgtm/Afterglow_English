@@ -877,3 +877,172 @@ rest, → 2.5 s, rest, ← → reversals, ↑ held 1.5 s, rest, ↓ 1 s, rest.
 - **Round 01.** It runs with no garden, no model and no errors.
 - **Not verified.** Reduced motion was checked in code only: the pane could not emulate it. A real
   phone was not tested, and neither was GPU time.
+
+**Completion flow, exit and Ending Preview (as built).**
+
+*How Round 02 progresses (investigated).*
+- **A building completes** when its transformation reaches 100 % (`site.transform`, `js/garden/round2.js`
+  `transformStep`). That transformation starts when its flower first reaches `R2.BLOOM_DONE`
+  (0.995). It advances in game time over `DURATION` = 42 s, ×0.8–1.35 with the flower's glow and
+  particles, so it takes about 31–52 s. Pause holds it.
+- **The flight out** starts by itself the moment the building she is inside completes:
+  `trackCompletion` sets `exitSeq = 'pending'`, then `beginLaunch()`. The camera turns to the glass
+  panel, the panel opens with light (the cue for where to go), and she flies out through it. She
+  can still steer her line with ← → and ↑, and she arrives in the city with her speed and heading
+  (`handOff`).
+- **"Back to the city"** leaves at any time. The transformation then completes while she is away,
+  and that building gets no flight out (`exitSeq = 'skip'`).
+- **Round 02 is complete** when all five buildings are complete (`AG.Gardens.allComplete()`).
+  There is no Round 03.
+- **The ending** is the existing city-wide completion state, not a separate scene:
+  - `AG.Gardens.finale` eases in;
+  - the sky takes all five colours, and every roof keeps a taller column;
+  - the central sentence plays once;
+  - the HUD shows "THE CITY IS IN BLOOM", with no next-building guidance;
+  - free flight continues.
+  No end card is shown for Round 02. Round 01's end card leads into Round 02.
+- **Measured, with no `__complete`.** Bloom, then the reaction (back to Flight after 1.6 s). The
+  transformation reached 100 % at 35 s, and the flight out began at 35.1 s. She was back in the city
+  at 39 s, with "NEXT: AURORA · 390 m" and the hint. The earlier 20 s test simply ended before the
+  transformation did.
+- **`__complete`** (the test harness only, not in the game) sets `site.transform = 0.99`. The real
+  `transformStep` then finishes it, so the same completion and flight-out code runs.
+
+*Flight-out camera.* Its follow now eases in. The rate ramps from 0.9 to 4.5 (eye) and from 1.5 to
+7 (target) over 1.4 s (`launchCamera`, `G.camT`). From the orbit view to behind her is up to about
+20 m, which the full-rate follow used to cover in half a second, peaking at about 100 m/s. It now
+peaks at about 24 m/s, close to her own 19 m/s.
+
+*Ending Preview (testing only).*
+- **Opening it.** The "Preview Ending" chip next to R02, or key **7** (press 7 again to return).
+  Both work only while Round 02 runs; in Round 01 the chip is dimmed and only shows a toast. Like
+  every chip, it is hidden on screens ≤ 860 px wide, so on a phone it is reachable only through
+  key 7.
+- **What it shows.** It keeps a copy of every building's progress and her place first
+  (`snapSites`). Then it sets all five complete, shows Round 02's existing ending, and places her
+  over the city, facing the buildings, under the white fade-in. The finale eases in from 0, so the
+  ending is seen arriving.
+- **While it runs.** Its doorways are closed and the line-up assist is off, so she cannot drift
+  into a building. The completion lines are not retold all at once: the central sentence plays
+  exactly once.
+- **The bar.** "ENDING PREVIEW · your progress is kept", with **Restart preview** (from the same
+  real progress again) and **Return to Round 02**.
+- **Returning.** Every building's state, the flower blooms, the told lines, the target and the
+  finale are put back. In the city, she goes back to where she was. From inside a garden, she goes
+  outside its doorway, facing away, as "Back to the city" leaves her.
+- **Persistence.** Nothing is stored: the game has no storage. Replay, a stage jump or R02 drops
+  the preview (and resets the progress, as they always did).
+
+*Tests* (built-in browser; 1280×720, 536×600 and 375×812).
+- **Natural completion.** Timings as above, with no console errors.
+- **Transition at 30 / 60 / 144 fps** (game logic stepped at a fixed rate from transform 0.97):
+  - exactly one launch and one hand-over;
+  - launch at 1.07 / 1.07 / 1.06 s, the city at 4.90 / 4.95 / 4.93 s;
+  - her turn rate ≤ 2.6 rad/s and her speed at the hand-over 19.3 m/s;
+  - camera eye ≤ 24.7 / 24.5 / 24.4 m/s, where it was 93–103 before the ease-in.
+- **Preview from a garden.** Rose was left at 50 %. Restart worked. After Return, Rose was still at
+  50 % with 0 / 5 complete, she was 83 m out and not drifting back in, and flying in by hand showed
+  the flower at 50 %.
+- **Preview from the city, after Rose was completed for real.** It showed 5 / 5 with "THE CITY IS IN
+  BLOOM". After Return: 1 / 5, Rose `exitSeq` 'done', target Aurora, and her position back within
+  0.9 m.
+- **During the preview.** 15 s with no input: no building was entered, the doorways were closed,
+  and the central sentence was seen once. After Return the doorways were open, and Rose could be
+  entered.
+- **Replay and R02.** Both during the preview: preview off, bar hidden, progress reset.
+- **375 px.** The bar sits at the top, under the goal pill, clear of the touch pad and the
+  narrative line. No horizontal scroll.
+- **Round 01.** Key 7 does nothing; the chip shows only a toast. No errors.
+- **Not verified.** A real phone, and the preview on a phone by touch (the chips are hidden there).
+  The flight-out camera was not judged by eye at 30 / 144 fps: those were measured, not seen.
+
+**The arrival circuit (as built).** On each visit to a garden she flies one slow 360° circuit round
+the flower, so it is seen from every side, then settles into her hover.
+
+*Where it lives.* `gardenTour()` in `js/core/flight.js` and `tourCamera()` in `js/garden/garden.js`.
+It is not a second controller: it only moves the same ring point (`G.az`) that ← → move, and widens
+the same ring (`G.ringNow`). The existing p5.Vector arrive steering (sub-stepped, force-limited)
+flies her after that point. The vertical controls, the reaction impulse and the flight out are
+unchanged.
+
+*Sequence and timing* (all from `dt`, never per frame).
+- **Wait.** `wait` lasts until 3.8 s after the entry and 0.6 s after she has arrived: the arrival
+  breath (1.6 s), then the Flight transition, held.
+- **Run.** One full turn of 2π. The pace is W = 2π / 13 s at full speed, eased in with the project
+  helper `U.damp` (rate 1.1), and braked to a stop on the last stretch (w ≤ √(2·a·remaining),
+  a = W / 2.2). Measured, it runs 16.3 s.
+- **Done.** She settles into her hover on the normal ring.
+
+*Radius.*
+- **During the circuit.** The ring widens to 1.3 × (4.9 m → 6.4 m), eased with `p.lerp`
+  (1 − e^(−0.9·dt)). Her head then passes well outside the open petals (≈ 4.6 m). Facing her travel,
+  her body trails along the tangent, outward.
+- **Afterwards.** The ring eases back to 4.9 m.
+- **Ring point.** It is placed with `p.cos` / `p.sin`.
+- **Speed.** Her speed limit during the circuit is 2 × the ring point's own speed, so she stays
+  close behind it.
+
+*Player input wins.*
+- **Pause.** While ← or → is held, the circuit's gain eases to 0 (rate 4), so it pauses. It resumes
+  0.6 s after release, easing back in (rate 1.2).
+- **What counts.** Only the guided angle counts toward the 360°. The hand-flown part does not.
+- **Direction.** ← → keep their screen-true direction. Measured: ← moved her from 0.29 to 0.22 of
+  the width, and → from 0.25 to 0.29.
+
+*Camera* (`tourCamera`).
+- **Following her.** During the circuit the orbit camera turns with her, by the same guided angle
+  each frame, so it never spins on its own.
+- **Drift.** It drifts at most 0.25 rad/s, scaled by the circuit's gain, toward keeping her 1.2 rad
+  (`TOUR_SIDE`) from its nearest ring point. That puts her beside the flower, neither in front of
+  it nor behind its petals. The drift fades over the last 0.8 rad, so the camera comes to rest with
+  her.
+- **Direction.** The circuit's direction is chosen as it starts: toward the camera's side from where
+  she is. She is then seen coming, her body trails outward, and the camera never has to swing
+  across.
+- **Player drag.** A drag of the view (a camera orbit, not a flower drag) sets `cam.userOrbit`, and
+  the circuit stops turning the view for the rest of that visit.
+- **Flower drag.** Dragging the flower's heart opens it as before. It is a separate interaction,
+  and it never changes the camera.
+
+*Tests* (built-in browser, 1280×720 unless noted).
+- **Real-time sequence** (with the flower opened at once): arrive 0 s, Flight 1.6 s, the circuit
+  from 5.4 s to 20.8 s (2π exactly), then the hover.
+- **Visibility during the circuit.** The heart stayed at 0.48–0.50 of the width, and she stayed
+  beside it at 0.21–0.30. Projected body points against the open flower's screen circle: 0 of 154
+  frames covered the flower, and 0 were hidden behind it.
+  - A first version kept her 0.9 rad from the near point, and she covered the flower; that is why
+    `TOUR_SIDE` is 1.2.
+- **Fixed-step simulation at 30 and 60 fps:**
+
+  | | 30 fps | 60 fps |
+  |---|---|---|
+  | circuit start | 4.57 s | 4.58 s |
+  | circuit length | 16.27 s | 16.33 s |
+  | angle covered | 2π | 2π |
+  | ring | 4.94 → 6.42 → 4.95 m | 4.94 → 6.42 → 4.96 m |
+  | camera turn rate | ≤ 0.48 rad/s | ≤ 0.48 rad/s |
+  | camera turn acceleration | ≤ 0.59 rad/s² | ≤ 0.83 rad/s² |
+  | her acceleration | ≤ 6.2 m/s² | ≤ 7.2 m/s² |
+  | her jerk | ≤ 28 m/s³ | ≤ 34 m/s³ |
+
+  - The camera's drift used to stop abruptly at the end, at 3.8 rad/s² at 60 fps. It now fades
+    out.
+- **Interactions during the circuit.**
+  - A flower drag opened it from 0 to 0.99, with no camera change and no Flight restart (one Flight
+    entry in the log).
+  - A view drag turned the camera, and the circuit stopped turning it.
+  - Flower_Reaction played once (arrive > flight > react > flight). A second visit to Rose ran the
+    circuit again, but not the reaction.
+- **Pause** froze the circuit and the camera, and Play resumed them. **Replay** reset everything;
+  after R02, Rose's circuit started again with the flower closed.
+- **Flight out and navigation.**
+  - The HUD read "NEXT: AURORA · 410 m", with the edge arrow in Aurora's colour, Rose's landmark
+    marker, and the hint "Fly to the beacon. Double-tap ↑ to rise; use ← → to steer."
+  - At 375×812, over five headings, no HUD element overlapped another (arrow, landmark marker,
+    HUD strip, touch pad, stage panel). The distance updated live.
+- **Round 01** ran with no errors, including stage 05: no garden and no model.
+- **Limitation at 375×812 (portrait phone).** The open flower plus the heroine on the circuit ring
+  need about 18 m of width, and the camera (≤ 20 m, inside the glass) sees about 10 m. The view
+  slides toward her, so the flower's far petals can leave the frame there. On wide screens
+  (1280×720) both stay fully in frame.
+- **Not verified.** A real phone, and GPU time.

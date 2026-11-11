@@ -164,12 +164,13 @@ AG.GardenScene = {
         // the pointer's change since the last event (robust for mouse and touch)
         cam.yaw -= (x - lastX) * 0.006;
         cam.pitch = p.constrain(cam.pitch + (y - lastY) * 0.004, -0.15, 1.2);
+        if (x !== lastX || y !== lastY) cam.userOrbit = true;     // (the player turned the view: the arrival circuit stops turning it)
       }
       lastX = x; lastY = y;
     }
     function up() { if (mode === 'flower') flower.pointerUp(); mode = null; }
     function wheel(d) { cam.dist = p.constrain(cam.dist * Math.exp(d * 0.001), 6, 20); }   // (≤ 20 m: inside the atrium's glass, r = 24 m)
-    function resetView() { cam.yaw = 0.55; cam.pitch = 0.08; cam.dist = 15.5; cam.target = [0, 4.2, 0]; cam.eye = null; mode = null; }
+    function resetView() { cam.yaw = 0.55; cam.pitch = 0.08; cam.dist = 15.5; cam.target = [0, 4.2, 0]; cam.eye = null; cam.userOrbit = false; mode = null; }
 
     /* the flower's own origin in p5's transform stack (shared by the receptacle and the petals):
        reset → its base → p.scale (growth / click swell / breathing / 100 % pulse, js/garden/flower.js

@@ -353,6 +353,46 @@ AG.Flight = (function () {
     if (trailClock <= 0) { trail.unshift(F.pos.slice()); trail.length = 24; trailClock = 0.05; }
   }
 
+  /* ROUND 02 · THE ARRIVAL CIRCUIT (garden mode only). Once she has arrived and her Flight pose is
+     held, the ring point carries her once round the flower (2π), slowly, so the flower is seen from
+     every side, then she settles into her hover. It is not a second controller: it only moves the
+     same ring point (G.az) the arrows move, and widens the ring (G.ringNow) so her body stays clear
+     of the open petals; the same p5.Vector arrive steering flies her after it.
+       pace     angular speed W = 2π / TOUR_RUN (≈ 13 s at full pace), eased in (U.damp, a project
+                helper) and braked to a stop on the last stretch (√(2·a·remaining)), so the whole
+                circuit takes about 15 s; computed from dt, never per frame
+       ← →      the player wins: while an arrow is held the circuit pauses (its gain eases to 0), and
+                resumes smoothly 0.6 s after release; what she flew by hand never counts as circuit
+       radius   the ring widens to TOUR_WIDE × ring during the circuit and eases back after it
+     G.tour = { state: 'wait' | 'run' | 'done', ang, w, gain, dAz (this frame's guided step), dir } */
+  const TOUR_RUN = 13, TOUR_WAIT = 3.8, TOUR_WIDE = 1.3;
+  function gardenTour(dt, steer) {
+    const G = F.garden;
+    if (!G.tour) G.tour = { state: 'wait', ang: 0, w: 0, gain: 0, dAz: 0, dir: 1, rest: 0, clock: 0, arrivedT: 0 };
+    const T = G.tour; T.dAz = 0; T.v = 0; T.clock += dt;
+    if (G.ringNow === undefined) G.ringNow = G.ring;
+    if (T.state === 'wait') {
+      T.arrivedT = F.gardenArrived ? T.arrivedT + dt : 0;
+      // after the arrival breath and the Flight transition (≈ 3.6 s from the entry), once she is there
+      if (T.clock >= TOUR_WAIT && T.arrivedT >= 0.6) T.state = 'run';
+    }
+    if (T.state === 'run') {
+      const W = 2 * Math.PI / TOUR_RUN, a = W / 2.2, rem = 2 * Math.PI - T.ang;
+      T.rest = steer ? 0 : T.rest + dt;
+      T.gain = U.damp(T.gain, steer || T.rest < 0.6 ? 0 : 1, steer ? 4 : 1.2, dt);
+      T.w = Math.min(U.damp(T.w, W * T.gain, 1.1, dt), Math.sqrt(2 * a * Math.max(0, rem)));
+      T.dAz = Math.min(T.w * dt, rem) * T.dir;
+      T.ang += Math.abs(T.dAz);
+      G.az += T.dAz;
+      T.v = T.w * G.ringNow;
+      if (T.ang >= 2 * Math.PI - 1e-4) { T.state = 'done'; T.w = 0; }
+    }
+    // the ring: wider from the start of the circuit until it is done, eased (p.lerp, frame-rate independent)
+    const wide = T.state === 'run' ? TOUR_WIDE : 1;
+    G.ringNow = p.lerp(G.ringNow, G.ring * wide, 1 - Math.exp(-0.9 * dt));
+    return T;
+  }
+
   function gardenUpdate(dt, input) {
     if (F.garden.launch) { launchUpdate(dt); return; }   // the flight out (below)
     const G = F.garden, k = F.keys, FC = AG.CONFIG.flight;
@@ -369,6 +409,7 @@ AG.Flight = (function () {
     const wantW = steer * side * (G.orbitSpeed / G.ring) * tighten;
     G.azVel = U.damp(G.azVel || 0, wantW, steer ? 3.0 : 2.2, dt);
     G.az += G.azVel * dt;
+    const T = gardenTour(dt, steer);
     // ↑ / ↓: the city's taps and double-taps (detected in press()) as eased lifts, a hold as a climb
     if (pendingLift > 0) { gLift += pendingLift * ROOM; pendingLift = 0; F.lifts = (F.lifts || 0) + 1; }
     liftLeft = 0;
@@ -384,14 +425,18 @@ AG.Flight = (function () {
     // speed: fast while she is being flown, back to the slow settling cruise when released, eased
     // with the city's acceleration constant (1 − e^(−accel·dt))
     const flown = steer !== 0 || Math.abs(G.azVel) > 0.15 || Math.abs(G.vh) > 0.3;
-    G.speedNow = p.lerp(G.speedNow, flown ? G.orbitSpeed * tighten * 1.15 : G.cruise, 1 - Math.exp(-FC.accel * 2 * dt));
+    // (the guided circuit's own pace: its ring point moves at T.v m/s, so her speed limit allows twice
+    // that, which keeps her close behind it instead of lagging metres back)
+    const wantSpeed = flown ? G.orbitSpeed * tighten * 1.15 : Math.max(G.cruise, 2 * T.v);
+    G.speedNow = p.lerp(G.speedNow, wantSpeed, 1 - Math.exp(-FC.accel * 2 * dt));
     const maxForce = p.map(G.speedNow, G.cruise, G.orbitSpeed, G.maxForce, G.fastMaxForce, true);
     gC.set(G.center[0], G.center[1] + 1.0, G.center[2]);
     // a magical impulse (the 3D heroine's flower reaction): the target rises and settles back as a
     // smooth bump, so the same arrive steering carries her up and down again
     let bump = 0;
     if (G.impulse) { const I = G.impulse; I.t += dt; bump = I.t < I.dur ? I.h * Math.pow(Math.sin(Math.PI * I.t / I.dur), 2) : 0; if (I.t >= I.dur) G.impulse = null; }
-    gTarget.set(G.center[0] + Math.cos(G.az) * G.ring, G.center[1] + G.h + bump, G.center[2] + Math.sin(G.az) * G.ring);
+    // the ring point (p.cos / p.sin of its azimuth), on the ring as it is now (wider during the circuit)
+    gTarget.set(G.center[0] + p.cos(G.az) * G.ringNow, G.center[1] + G.h + bump, G.center[2] + p.sin(G.az) * G.ringNow);
     pos.set(F.pos[0], F.pos[1], F.pos[2]);
     const n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
     for (let s = 0; s < n; s++) {

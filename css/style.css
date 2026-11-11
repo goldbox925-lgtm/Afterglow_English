@@ -397,3 +397,16 @@ body.garden #r2Hud { opacity: 1; visibility: visible; }
   #gardenPanel .g-title { display: none; }
   #gardenPanel .g-text { font-size: 11px; line-height: 1.35; }
 }
+
+/* ---------- Round 02 · Ending Preview (testing only) ---------- */
+.chip.dev { margin-left: 6px; border-style: dotted; }
+body:not(.garden) .chip.dev { opacity: 0.35; }
+#previewBar { position: fixed; left: 50%; top: 132px; transform: translateX(-50%); z-index: 9; display: none; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100vw - 32px); padding: 7px 10px; border-radius: 14px; border: 1px dashed rgba(255, 220, 170, 0.55); background: rgba(14, 8, 28, 0.72); backdrop-filter: blur(6px);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; color: var(--ink); }
+body.r2-preview #previewBar { display: flex; }
+#previewBar .pv-label i { font-style: normal; color: var(--dim); letter-spacing: 0.04em; }
+#previewBar button { font: inherit; letter-spacing: 0.06em; color: var(--ink); background: transparent; border: 1px solid var(--faint); border-radius: 10px; padding: 5px 9px; cursor: pointer; }
+#previewBar button:hover { border-color: var(--ink); color: #fff; }
+body.cinematic #previewBar { display: none; }
+@media (max-width: 860px) { #previewBar { top: 74px; } }

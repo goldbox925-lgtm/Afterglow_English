@@ -275,6 +275,7 @@
         else if (k === 'Escape') AG.UI.toggleHelp(false);
         else if (k >= '1' && k <= '5') handlers.jump(C.states.at(Number(k) - 1).id);
         else if (k === '6') handlers.jumpR2();                         // R02 — Memory Garden
+        else if (k === '7' && AG.Garden.isActive()) { if (AG.Garden.inPreview()) AG.Garden.endPreview(); else AG.Garden.previewEnding(); }   // testing: Round 02's ending preview (again: back)
         else if (k === 'q' || k === 'Q') {
           const opts = ['auto', 'low', 'balanced', 'high'];
           const nq = opts[(opts.indexOf(qualityMode) + 1) % opts.length];

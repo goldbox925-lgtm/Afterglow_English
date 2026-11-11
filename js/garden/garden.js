@@ -192,7 +192,96 @@ AG.Garden = (function () {
     AG.U.emit('gardenPhase', { phase: G.phase });
   }
 
+  /* ---------- ENDING PREVIEW (testing only; the "Preview Ending" chip) ----------
+     Round 02's ending is the existing city-wide completion state (all five buildings complete:
+     AG.Gardens.finale eases in, the sky takes all five colours, the taller rooftop columns, the
+     central sentence, "THE CITY IS IN BLOOM"). The preview shows exactly that, without playing the
+     five buildings: it keeps a copy of every building's real progress and her place first, and
+     "Return to Round 02" puts both back. Nothing of it is stored or carried into normal play; a
+     Replay or a stage jump drops the copy (the progress is reset by that anyway). */
+  let PV = null;
+  const SITE_KEYS = ['bloomed', 'completed', 'sinceBloom', 'transform', 'windows', 'surge', 'exitSeq', 'reacted'];
+  function snapSites() {
+    if (G.scene && G.site && (G.phase === 'inside' || G.phase === 'launch' || G.phase === 'leave')) G.site.flower = G.scene.flower.snapshot();
+    const Gs = AG.Gardens, F = AG.Flight;
+    return {
+      sites: Gs.sites.map((s) => { const o = {}; for (const k of SITE_KEYS) o[k] = s[k]; o.stage = Object.assign({}, s.stage); o.told = Object.assign({}, s.told); o.flower = Object.assign({}, s.flower); return o; }),
+      finale: Gs.finale, awake: Gs.awake, target: G.targetSite, site: G.site, visits: G.visits,
+      phase: G.phase, pos: F.pos.slice(), yaw: F.yaw
+    };
+  }
+  function restoreSites(S) {
+    const Gs = AG.Gardens;
+    Gs.sites.forEach((s, i) => { const o = S.sites[i]; for (const k of SITE_KEYS) s[k] = o[k]; Object.assign(s.stage, o.stage); s.told = Object.assign({}, o.told); s.flower = Object.assign({}, o.flower); });
+    Gs.finale = S.finale; Gs.awake = S.awake; G.targetSite = S.target; G.visits = S.visits;
+  }
+  /* out of a garden (if she is in one) straight into the city flight, under the white fade */
+  function toCity() {
+    const F = AG.Flight;
+    if (G.phase === 'inside' || G.phase === 'launch' || G.phase === 'leave' || G.phase === 'enter') {
+      showInside(false);
+      if (F.garden) F.exitGarden();
+      if (G.scene) G.scene.up();
+    }
+    if (p && p.canvas) p.canvas.style.cursor = '';
+    setFlightAssist(true); parkMouse();
+    G.phase = 'approach'; G.t = 0; G.white = 1; G.exit = null; G.entryHint = false; G.targetNear = 0;
+  }
+  function previewEnding() {
+    if (G.phase === 'off') { AG.UI.toast('Start Round 02 first (R02), then preview its ending'); return false; }
+    if (PV) restoreSites(PV); else PV = snapSites();   // Restart: from the same real progress again
+    const Gs = AG.Gardens, F = AG.Flight;
+    for (const s of Gs.sites) {
+      s.bloomed = true; s.completed = true; s.transform = 1; s.windows = 1; s.exitSeq = 'skip'; s.reacted = true;
+      s.sinceBloom = Math.max(s.sinceBloom, 60); s.surge = 0;
+      for (const k in s.stage) s.stage[k] = 1;
+      s.flower = { bloom: 1, target: 1, awake: true, awakeK: 1, full: true, clicks: s.flower.clicks || 0 };
+      s.told.complete = -1;                // (each completion's line is not retold all at once…)
+    }
+    Gs.sites[Gs.sites.length - 1].told.complete = false;   // (…only the ending's central sentence, once)
+    if (AG.R2Hud) AG.R2Hud.clear();
+    Gs.finale = 0; Gs.awake = 0;          // (both ease in again: the ending is seen arriving)
+    if (G.scene && G.site) loadFlower(G.site);
+    toCity();
+    closePortals();
+    // a vantage over the city: back from the five buildings' centre, above their roofs, facing them
+    const R = Gs.sites.map((s) => s.rooftop.center), c = [0, 1, 2].map((i) => R.reduce((a, r) => a + r[i], 0) / R.length);
+    const far = Math.max(...R.map((r) => Math.hypot(r[0] - c[0], r[2] - c[2]))), top = Math.max(...R.map((r) => r[1]));
+    const d0 = Math.hypot(F.pos[0] - c[0], F.pos[2] - c[2]) > 1 ? [(F.pos[0] - c[0]), (F.pos[2] - c[2])] : [0, 1], dl = Math.hypot(d0[0], d0[1]);
+    F.pos = [c[0] + d0[0] / dl * (far + 140), top + 45, c[2] + d0[1] / dl * (far + 140)];
+    const to = V.sub([c[0], top, c[2]], F.pos);
+    F.yaw = Math.atan2(to[0], -to[2]); F.yawRate = 0; F.bank = 0; F.vy = 0; F.speed = AG.CONFIG.flight.cruise; F.resetMotion();
+    G.portal = G.site ? G.site.portal : Gs.sites[0].portal;
+    AG.Camera.snapNext();
+    G.preview = true; document.body.classList.add('r2-preview');
+    AG.U.emit('gardenPhase', { phase: G.phase });
+    return true;
+  }
+  function endPreview() {
+    if (!PV) return false;
+    const S = PV, F = AG.Flight; PV = null;
+    restoreSites(S);
+    if (AG.R2Hud) AG.R2Hud.clear();
+    G.site = S.site || G.site;
+    if (G.scene && G.site) loadFlower(G.site);
+    toCity();
+    openPortals();
+    if (S.phase === 'approach') {
+      F.pos = S.pos.slice(); F.yaw = S.yaw; F.yawRate = 0; F.bank = 0; F.vy = 0; F.speed = AG.CONFIG.flight.cruise; F.resetMotion();
+    } else if (G.site) {
+      // she was in a garden: back outside its doorway as "Back to the city" leaves her (facing away,
+      // so she never flies in again by herself; turning round and in takes a few seconds)
+      G.portal = G.site.portal; placeOutside(G.portal.inset + AG.CONFIG.flight.radius + 14, false);
+    }
+    G.portal = G.site ? G.site.portal : G.portal;
+    AG.Camera.snapNext();
+    G.preview = false; document.body.classList.remove('r2-preview');
+    AG.U.emit('gardenPhase', { phase: G.phase });
+    return true;
+  }
+
   function reset() {
+    PV = null; G.preview = false; document.body.classList.remove('r2-preview');
     closePortals();
     AG.Gardens.resetAll(); G.site = null;
     setFlightAssist(false);
@@ -239,7 +328,7 @@ AG.Garden = (function () {
       // a gentle line-up, only when she is in front of the doorway and roughly heading for it
       const L = local(F.pos, P), rel = V.sub(P.c, F.pos);
       const want = Math.atan2(rel[0], -rel[2]), diff = Math.atan2(Math.sin(want - F.yaw), Math.cos(want - F.yaw));
-      const inFront = L.d > 0 && L.d < 230;
+      const inFront = !PV && L.d > 0 && L.d < 230;     // (none in the ending preview: no doorway to line up with)
       const k = inFront ? U.smooth(0.8, 0.25, Math.abs(diff)) * U.smooth(230, 120, L.d) : 0;
       F.assistTurn = U.clamp(diff * 1.4, -0.45, 0.45) * k;
       F.assistVy = U.clamp((P.c[1] - F.pos[1]) * 1.1, -12, 12) * (inFront ? U.smooth(0.9, 0.3, Math.abs(diff)) : 0);
@@ -251,7 +340,9 @@ AG.Garden = (function () {
       trackTarget();
       if ((G.occT = (G.occT || 0) - dt) <= 0) { G.occT = 0.12; occlusion(); }
       // through the doorway? (only when she flies into it herself: nothing moves her there)
-      const FC = AG.CONFIG.flight, through = AG.Gardens.sites.find((s) => {
+      // (the ending preview shows the city only: its doorways are closed, js/core/collision.js keeps
+      // the buildings solid, and nothing is entered)
+      const FC = AG.CONFIG.flight, through = !PV && AG.Gardens.sites.find((s) => {
         const Q = s.portal, L2 = local(F.pos, Q);
         return L2.d < FC.radius + 0.6 && L2.d > -6 && Math.abs(L2.along) < Q.w / 2 && L2.up > -Q.h / 2 && L2.up < Q.h / 2;
       });
@@ -283,6 +374,7 @@ AG.Garden = (function () {
       // ← → are true to the view, so it needs the camera's right vector
       if (F.garden) { const e = G.scene.view.eye, t = G.scene.cam.target, d = V.norm(V.sub(t, e)); F.garden.camRight = V.norm(V.cross(d, [0, 1, 0])); }
       F.update(dt, input, true);
+      tourCamera(dt);
       // PROXIMITY: p.dist to the flower's heart → p.map (9 m far … 3.6 m close) → p.constrain 0..1
       const f = G.scene.flower, H = f.heart().c;
       const d = p.dist(F.pos[0], F.pos[1], F.pos[2], H[0], H[1], H[2]);
@@ -335,6 +427,31 @@ AG.Garden = (function () {
     }
   }
 
+  /* THE ARRIVAL CIRCUIT's camera (js/core/flight.js gardenTour): while the circuit runs, the orbit
+     camera turns round the flower WITH her, by the same guided angle each frame (so it never spins on
+     its own), and drifts at most 0.25 rad/s (× the circuit's eased gain) toward keeping her
+     TOUR_SIDE (1.2 rad) from its nearest ring point: beside the flower, neither in front of it nor
+     hidden behind its petals, and the flower is seen from every side. The circuit's direction is
+     chosen as it starts: toward the camera's side from where she is. Her hand steering pauses it (gain → 0); a drag of the
+     view by the player hands the camera to them for the rest of the circuit. */
+  const TOUR_SIDE = 1.2;     // rad from the camera's nearest ring point: beside the flower (≈ 6 m out), not in front of it
+  function tourCamera(dt) {
+    const F = AG.Flight, T = F.garden && F.garden.tour, cam = G.scene && G.scene.cam;
+    if (!T || !cam || cam.eye) return;
+    const c = G.scene.flower.center, herAz = Math.atan2(F.pos[2] - c[2], F.pos[0] - c[0]);
+    let eyeAz = Math.PI / 2 - cam.yaw;                      // (eye azimuth = π/2 − yaw)
+    // before it starts: the circuit runs TOWARD the camera's side from where she is, so her body trails
+    // outward (away from the flower) and she is seen coming, and the camera need not swing across
+    if (T.state === 'wait') { T.dir = Math.atan2(Math.sin(herAz - eyeAz), Math.cos(herAz - eyeAz)) > 0 ? -1 : 1; return; }
+    if (T.state !== 'run' || cam.userOrbit) return;
+    cam.yaw -= T.dAz;                                       // the camera turns with her …
+    eyeAz = Math.PI / 2 - cam.yaw;
+    const want = herAz + T.dir * TOUR_SIDE;                 // … and keeps her TOUR_SIDE ahead of its own side
+    const err = Math.atan2(Math.sin(want - eyeAz), Math.cos(want - eyeAz));
+    // (the drift fades out over the circuit's last 0.8 rad, so the camera comes to rest smoothly with her)
+    const fadeOut = U.smooth(0, 0.8, 2 * Math.PI - T.ang);
+    cam.yaw -= U.clamp(err * 0.5, -0.25, 0.25) * T.gain * fadeOut * dt;
+  }
   /* the 3D heroine's animation follows her garden flight (js/character/heroModel.js) */
   /* HER WAKE (garden and flight out): a few small glints shed behind her body, more the faster she
      flies (none while she hovers). At most 24 live sprites, drawn with the flower's own glow-sprite
@@ -380,7 +497,7 @@ AG.Garden = (function () {
     if (cam) {
       const on = G.hero3d && phase === 'inside' && HM.centre;
       cam.follow = on ? { p: HM.centre, r: HM.reach(), v: AG.Flight.vel || [0, 0, 0] } : null;
-      cam.fitW = on ? AG.Flight.garden.ring + HM.reach() * 1.6 : null;
+      cam.fitW = on ? (AG.Flight.garden.ringNow || AG.Flight.garden.ring) + HM.reach() * 1.6 : null;
     }
     if (!G.hero3d) return;
     const F = AG.Flight, v = F.vel || [0, 0, 0];
@@ -436,7 +553,11 @@ AG.Garden = (function () {
       cam.target = cam.target.map((v, i) => U.damp(v, [0, 4.2, 0][i], 1.8, dt));
       return;
     }
-    if (!cam.eye) cam.eye = sc.view.eye.slice();
+    if (!cam.eye) { cam.eye = sc.view.eye.slice(); G.camT = 0; }
+    // the follow eases IN (its rate grows over ~1.4 s): from the orbit view to behind her is up to
+    // ~20 m, which a full-rate follow covered in half a second (a whip); now it is a glide
+    G.camT = (G.camT || 0) + dt;
+    const ramp = U.smooth(0, 1.4, G.camT);
     const v = F.vel || [0, 0, 0], hs = Math.hypot(v[0], v[2]), hd = hs > 1 ? [v[0] / hs, 0, v[2] / hs] : [n[0], 0, n[2]];
     // (the 3D heroine is about 3× the pose images: the camera follows from proportionally further back)
     const fk = G.hero3d ? Math.min(1.9, Math.sqrt(AG.HeroModel.sizeK())) : 1;
@@ -445,8 +566,8 @@ AG.Garden = (function () {
     if (er > 19) { eye[0] *= 19 / er; eye[2] *= 19 / er; }
     eye[1] = U.clamp(eye[1], 0.5, 26);
     const tg = V.add(F.pos, V.scale(hd, 4));
-    cam.eye = cam.eye.map((x, i) => U.damp(x, eye[i], 4.5, dt));
-    cam.target = cam.target.map((x, i) => U.damp(x, tg[i], 7, dt));
+    cam.eye = cam.eye.map((x, i) => U.damp(x, eye[i], 0.9 + 3.6 * ramp, dt));
+    cam.target = cam.target.map((x, i) => U.damp(x, tg[i], 1.5 + 5.5 * ramp, dt));
   }
   /* THE FLIGHT OUT, 2: past the glass and clear of the real facade, she continues in the city. The
      garden's axes are the city's and its origin is the building's centre at the doorway's floor (the
@@ -565,6 +686,7 @@ AG.Garden = (function () {
 
   function enterGardenFlight() {
     const sc = G.scene, c = sc.flower.center;
+    sc.cam.userOrbit = false;                   // (a new visit: the arrival circuit may turn the view again)
     prepareAtrium();
     sc.camera();
     const camAz = Math.atan2(sc.view.eye[2] - c[2], sc.view.eye[0] - c[0]);
@@ -676,6 +798,7 @@ AG.Garden = (function () {
     init, setWorld, resize, start, reset, leave, update, draw, drawsScene, portalDraw, target, goalText, goalColor, hintText, hintTitle, landmarks, targetHidden, cameraPose, siteBloom, choose, chooseAll,
     wantsPointer, pointerDown, pointerMove, pointerUp, hover, wheel,
     isActive: () => G.phase !== 'off',
-    wakeInfo: () => ({ live: FX.n, born: FX.born })   // (her wake's sprites, for the checks)
+    wakeInfo: () => ({ live: FX.n, born: FX.born }),   // (her wake's sprites, for the checks)
+    previewEnding, endPreview, inPreview: () => !!PV
   });
 })();

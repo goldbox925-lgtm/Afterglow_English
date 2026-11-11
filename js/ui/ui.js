@@ -131,6 +131,15 @@ AG.UI = (function () {
     r2.title = 'R02 — Memory Garden: start Round 02 at the doorway of light (presentation jump, key 6)';
     r2.addEventListener('click', () => handlers.jumpR2());
     chips.appendChild(r2);
+    // testing only: preview Round 02's ending (the city in bloom) without playing the five buildings;
+    // the real progress is kept and put back by "Return to Round 02" (js/garden/garden.js; key 7)
+    const pe = document.createElement('button');
+    pe.className = 'chip dev'; pe.id = 'chipEnding'; pe.textContent = 'Preview Ending';
+    pe.title = 'Testing: preview Round 02\'s ending (the city in bloom). Your progress is kept and restored. Available in Round 02 (key 7).';
+    pe.addEventListener('click', () => AG.Garden.previewEnding());
+    chips.appendChild(pe);
+    $('pvReturn').addEventListener('click', () => AG.Garden.endPreview());
+    $('pvRestart').addEventListener('click', () => AG.Garden.previewEnding());
     // feedback where the viewer clicks
     U.on('tap', (e) => {
       const r = document.createElement('span');
