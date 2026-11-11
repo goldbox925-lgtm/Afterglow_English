@@ -1,23 +1,30 @@
 /* =====================================================================
    Round 02 · Memory Garden — the Interactive Bloom flower (shaders)
    ---------------------------------------------------------------------
-   flowerPetal  ONE petal per draw call (uniforms uA/uB/uC describe it).
+   flowerPetal  ONE petal per draw call (uniforms uA/uB/uC/uD describe it).
      The mesh is a plain (u, v) grid: u = 0 at the base pivot … 1 at the
-     tip, v = −1 … 1 across. The vertex shader bends it into a real 3D
-     petal every frame:
-       · the spine is a circular arc in the petal's own vertical plane:
-         its direction starts at angle θ from vertical (θ = how far the
-         petal has opened, rotating about the PIVOT at its base) and turns
-         by k per unit length (k < 0 curls the tip inward → bud; k > 0
-         lets it fall outward). Closed form, so no stepping:
-            r(s) = (cos θ − cos(θ+ks)) / k ,  y(s) = (sin(θ+ks) − sin θ) / k
-       · the width follows a pointed lotus profile, and the two halves
-         cup toward the inner face (more cupped when closed),
-       · a little flutter/twist from CPU noise.
+     tip, v = −1 … 1 across. The VERTEX shader bends it into a real 3D
+     petal in the petal's own local frame (petalLocal), and p5's model
+     matrix (uModelMatrix: p.translate / p.rotate / p.scale, see
+     js/garden/gardenScene.js) places it: azimuth, base, the rotation
+     about its base as it opens, idle sway, growth. Shape:
+       · the spine leaves the PIVOT straight up (p.rotate tilts it open by
+         θ about the base) and bends with a curvature that changes along it,
+         k(s) = k0 + k1·s: an S-curve (flared base, upturned tip) when open,
+         a bulge folding inward over the bud when closed. Integrated
+         numerically (10 midpoint steps);
+       · a rounded obovate outline (widest above the middle, narrow claw,
+         soft round tip), slightly asymmetric; the halves cup inward, the
+         edges curl back near the tip, a faint noise ripple;
+       · the normal comes from the deformed surface (central differences);
+       · flutter / twist from CPU p.noise().
+     The FRAGMENT shader is a lit translucent tissue: hemisphere ambient,
+     a cool key light and a warm point light at the core (wrap diffuse),
+     back-light transmission, a soft dewy highlight, a fresnel sheen,
+     thin-film iridescence, noise mottling and striations, fine veins with
+     flowing light, soft rims; premultiplied alpha, sorted back to front by
+     the CPU; HDR, so the bloom pass adds the glow.
      uKind 1 draws the golden receptacle (a small dome mesh) instead.
-     Fragment: translucent iridescent surface (alpha blended, sorted back
-     to front by the CPU), glowing veins, bright rims, warm light from the
-     core near the base, all HDR so the bloom pass picks the light up.
    flowerSprite  camera-facing sprites and thin ribbons:
      kind 0 = glow sprites (core glow, anthers, floating motes) from
               uniform arrays (CPU positions, LightParticle objects)
@@ -33,49 +40,75 @@ AG.SHADERS.flowerPetal = {
   vert: AG.SHADERS.header + AG.SHADERS.common + `
 in vec3 aPosition; in vec2 aTexCoord;
 uniform mat4 uView, uProj;
-uniform vec3 uCenter;      // flower base (world)
-uniform float uScale;      // metres per flower unit
-uniform vec4 uA;           // azimuth φ, pivot radius r0, length L, half-width W
-uniform vec4 uB;           // opening angle θ, curvature k, cup, pivot height y0
-uniform vec4 uC;           // flutter (sideways sway at the tip), twist, -, -
+uniform mat4 uModelMatrix; // p5's own transform stack (p.translate / p.rotate / p.scale in gardenScene.js)
+uniform vec3 uCenter;      // flower base (world) — used by the lighting
+uniform float uScale;      // metres per flower unit — used by the lighting
+uniform vec4 uA;           // -, pivot radius r0, length L, half-width W
+uniform vec4 uB;           // θ (hinge + sway: ONLY for the closed bud's wrap, see below), base curvature k0, cup, pivot height y0
+uniform vec4 uC;           // flutter (sideways sway at the tip), twist, curvature change k1, asymmetry
+uniform vec4 uD;           // edge curl, surface ripple, noise seed, wrap (1 = closed: wrapped round the axis)
 uniform float uKind;       // 0 petal · 1 receptacle dome
 out vec2 vUv; out vec3 vN; out vec3 vWorld; out float vU;
-vec2 spine(float s, float th, float k){
-  if (abs(k) < 1e-3) return vec2(s * sin(th), s * cos(th));
-  return vec2((cos(th) - cos(th + k * s)) / k, (sin(th + k * s) - sin(th)) / k);
+
+/* one point of the petal in its OWN LOCAL FRAME: the base pivot at the origin, the petal rising
+   along +Y, +X = away from the flower's centre, +Z = across. Where the petal stands, which way it
+   faces, how far it has rotated open about its base and how large it is all come from p5's model
+   matrix (p.translate → p.rotate(−φ, Y) → p.translate(base) → p.rotate(−θ, Z) → p.scale).
+   SPINE: leaves the base straight up and bends with a curvature that changes along it,
+   k(s) = k0 + k1·s (an S-curve when open, a bulge folding inward when closed), integrated
+   numerically (midpoint rule).
+   OUTLINE: rounded obovate (widest above the middle, narrow claw, soft round tip), one side a
+   little wider; the halves cup inward, the edges curl back near the tip, a faint noise ripple. */
+vec3 petalLocal(float u, float v, out vec3 nIn3){
+  float L = uA.z, W = uA.w, k0 = uB.y, cup = uB.z, k1 = uC.z, asym = uC.w;
+  float s = u * L, h = s / 10.0;
+  vec2 sp = vec2(0.0);
+  for (int i = 0; i < 10; i++){ float m = (float(i) + 0.5) * h; float al = k0 * m + 0.5 * k1 * m * m; sp += vec2(sin(al), cos(al)) * h; }
+  float al = k0 * s + 0.5 * k1 * s * s;
+  vec2 nIn = vec2(-cos(al), sin(al));                       // toward the inner face, in (out, up)
+  nIn3 = vec3(nIn, 0.0);
+  float shape = pow(max(sin(PI * pow(clamp(u, 0.0, 1.0), 0.6)), 0.0), 0.55);
+  float w = W * max(shape, 0.17 * (1.0 - u)) * (1.0 + asym * v);
+  float tw = uC.y * u;                                       // a slight twist toward the tip
+  vec3 Tw = normalize(vec3(0.0, sin(tw) * 0.25, cos(tw)));
+  float av = abs(v);
+  float ripple = (vnoise(vec3(u * 3.5, v * 2.2, uD.z * 17.0)) - 0.5) * uD.y * W * smoothstep(0.1, 0.6, u);
+  float lean = (uC.x + asym * 0.18) * u * u;                // flutter + a lean to one side
+  vec3 flatP = vec3(sp, 0.0) + Tw * (v * w) + nIn3 * (cup * v * v * w - uD.x * av * av * av * u * u * w + ripple) + vec3(0.0, 0.0, lean);
+  if (uD.w < 0.001) return flatP;
+  // CLOSED BUD: the width wraps round the FLOWER's axis at the petal's radius, so the bud is one
+  // smooth rounded body. That needs the petal's position in the flower (radius r0 + …), so the
+  // same θ that p.rotate() applies is used here to go to the flower's frame and back.
+  float c = cos(uB.x), sn = sin(uB.x), r0 = uA.y, y0 = uB.w;
+  vec2 f = vec2(sp.x * c + sp.y * sn, -sp.x * sn + sp.y * c);           // spine rotated by θ (= the hinge)
+  float rr = r0 + f.x, nInY = -nIn.x * sn + nIn.y * c;
+  float a = clamp(v * w / max(rr, 0.1), -1.25, 1.25) + lean / max(rr, 0.3);
+  vec3 q = vec3((rr + ripple * 0.5) * cos(a) - r0, f.y + 0.12 * cup * v * v * w * nInY, (rr + ripple * 0.5) * sin(a));
+  vec3 wrapped = vec3(q.x * c - q.y * sn, q.x * sn + q.y * c, q.z);      // back into the petal's local frame
+  return mix(flatP, wrapped, uD.w);
 }
 void main(){
   if (uKind > 0.5){
-    // receptacle: aPosition is a unit dome; scaled and lifted to the flower's heart
-    vec3 p = uCenter + vec3(aPosition.x * 0.13, aPosition.y * 0.1 + 0.09, aPosition.z * 0.13) * uScale;
+    // receptacle: a unit dome, placed and scaled by p5's model matrix (p.translate / p.scale)
+    vec3 lp = vec3(aPosition.x * 0.13, aPosition.y * 0.1 + 0.09, aPosition.z * 0.13);
+    vec3 p = (uModelMatrix * vec4(lp, 1.0)).xyz;
     vN = normalize(vec3(aPosition.x, aPosition.y * 1.4, aPosition.z));
     vUv = aTexCoord; vU = 0.0; vWorld = p;
     gl_Position = uProj * uView * vec4(p, 1.0);
     return;
   }
   float u = aPosition.x, v = aPosition.y;
-  float phi = uA.x, r0 = uA.y, L = uA.z, W = uA.w;
-  float th = uB.x, k = uB.y, cup = uB.z, y0 = uB.w;
-  float s = u * L;
-  vec2 sp = spine(s, th, k);
-  float al = th + k * s;
-  vec2 d2 = vec2(sin(al), cos(al));            // spine direction in (radial, up)
-  vec2 nIn = vec2(-cos(al), sin(al));          // toward the inner face
-  // pointed lotus outline: narrow pivot, widest a little below the middle, sharp tip
-  float w = W * (0.10 + 0.90 * pow(sin(PI * pow(u, 0.78)), 0.85)) * pow(1.0 - u, 0.12);
-  vec3 R = vec3(cos(phi), 0.0, sin(phi)), T = vec3(-sin(phi), 0.0, cos(phi)), Y = vec3(0.0, 1.0, 0.0);
-  float tw = uC.y * u;                          // a slight twist toward the tip
-  vec3 Tw = normalize(T * cos(tw) + Y * sin(tw) * 0.25);
-  vec3 nIn3 = R * nIn.x + Y * nIn.y;
-  vec3 p = R * (r0 + sp.x) + Y * (y0 + sp.y)
-         + Tw * (v * w)
-         + nIn3 * (cup * v * v * w)
-         + T * (uC.x * u * u);                  // flutter
-  // normal from the two surface tangents
-  vec3 tu = R * d2.x + Y * d2.y;
-  vec3 tv = Tw + nIn3 * (2.0 * cup * v * w);
-  vN = normalize(cross(tv, tu));
-  vec3 wp = uCenter + p * uScale;
+  vec3 nIn3, tmp;
+  vec3 lp = petalLocal(u, v, nIn3);
+  // the true surface normal from the deformed surface itself (central differences)
+  const float e = 0.012;
+  vec3 tu = petalLocal(min(u + e, 1.0), v, tmp) - petalLocal(max(u - e, 0.0), v, tmp);
+  vec3 tv = petalLocal(u, min(v + e, 1.0), tmp) - petalLocal(u, max(v - e, -1.0), tmp);
+  vec3 n = normalize(cross(tv, tu));
+  if (dot(n, nIn3) < 0.0) n = -n;                            // n = the INNER face's normal
+  // p5's model matrix: rotations and uniform scales only, so its 3×3 part carries the normal
+  vN = normalize(mat3(uModelMatrix) * n);
+  vec3 wp = (uModelMatrix * vec4(lp, 1.0)).xyz;
   vUv = vec2(u, v); vU = u; vWorld = wp;
   gl_Position = uProj * uView * vec4(wp, 1.0);
 }
@@ -85,12 +118,17 @@ in vec2 vUv; in vec3 vN; in vec3 vWorld; in float vU;
 out vec4 outColor;
 uniform float uKind;
 uniform vec3 uBaseCol, uBodyCol, uTipCol, uRimCol, uCoreCol;   // p.lerpColor results (CPU)
-uniform float uBloom, uAwake, uCore, uVein, uAlpha, uSeed;
+uniform float uBloom, uAwake, uCore, uVein, uAlpha, uSeed, uIri, uEmit;
 uniform vec3 uCenter; uniform float uScale;
 void main(){
   vec3 V = normalize(uCamPos - vWorld);
-  vec3 N = normalize(vN); if (!gl_FrontFacing) N = -N;
-  float ndv = abs(dot(N, V)), fr = pow(1.0 - ndv, 2.2);
+  vec3 Nf = normalize(vN);
+  vec3 N = gl_FrontFacing ? Nf : -Nf;                        // two-sided: the face we are looking at
+  if (dot(N, V) < 0.0) N = -N;
+  float ndv = clamp(dot(N, V), 0.0, 1.0), fr = pow(1.0 - ndv, 2.4);
+  // the warm core light: a soft point light just above the heart
+  vec3 Lc = uCenter + vec3(0.0, 0.42, 0.0) * uScale - vWorld; float dc = length(Lc) / uScale; Lc = normalize(Lc);
+  float coreAtt = 1.0 / (1.0 + dc * dc * 2.2);
   if (uKind > 0.5){
     // the golden receptacle: warm, bright toward its top, rim-lit
     float top = smoothstep(-0.2, 1.0, vN.y);
@@ -99,31 +137,52 @@ void main(){
     return;
   }
   float u = vUv.x, v = vUv.y, av = abs(v);
-  // body gradient: warm near the pivot, the main colour, a cooler tip
-  vec3 col = mix(uBaseCol, uBodyCol, smoothstep(0.0, 0.45, u));
-  col = mix(col, uTipCol, smoothstep(0.45, 1.0, u) * 0.85);
-  // thin-film iridescence: the hue drifts around the petal's own colour with the viewing angle
-  // (and toward cyan at grazing angles) instead of washing it toward grey
-  vec3 ir = 0.5 + 0.5 * cos(6.2832 * (fr * 0.9 + u * 0.35 + av * 0.2 + uSeed + vec3(0.0, 0.33, 0.67)));
-  col *= 1.0 + (ir - 0.5) * 0.75;
-  col = mix(col, uTipCol, fr * 0.45);
-  // veins: a central vein and side veins that sweep toward the tip, flowing light inside
-  float mid = exp(-av * 30.0) * smoothstep(0.98, 0.2, u) * smoothstep(0.0, 0.12, u);
-  float sweep = fract(u * 7.0 - av * 2.6 + 0.15);
-  float side = smoothstep(0.08, 0.0, abs(sweep - 0.5) - 0.42) * smoothstep(0.0, 0.25, av) * smoothstep(0.98, 0.5, av) * smoothstep(0.95, 0.15, u);
-  float flow = 0.65 + 0.35 * sin(u * 14.0 - uTime * 2.2 + uSeed * 20.0);
-  float vein = (mid * 1.0 + side * 0.55) * flow;
-  // rims (the petal edge and tip) and the warm light the core throws on the inner base
-  // (no rim right at the narrow base, where ten petals overlap at the heart)
-  float rim = (smoothstep(0.78, 1.0, av) + smoothstep(0.88, 1.0, u) * 0.6) * smoothstep(0.06, 0.32, u);
-  float coreLight = exp(-u * 5.5) * uCore * 0.6;
-  vec3 emit = uRimCol * rim * (0.30 + 0.45 * uBloom) + mix(uRimCol, vec3(1.0, 0.62, 0.3), smoothstep(0.45, 0.0, u) * 0.6) * vein * uVein * 1.0
-            + vec3(1.0, 0.48, 0.12) * coreLight * 1.1 + uRimCol * fr * 0.14 * (0.3 + 0.7 * uBloom);
-  vec3 c = col * (0.40 + 0.22 * uAwake + 0.38 * uBloom) + emit;
-  // translucent: thin in the middle, denser at the rims and at grazing angles
-  float a = clamp(uAlpha * (0.52 + 0.3 * fr + 0.25 * rim + 0.15 * vein), 0.0, 0.95);
-  // p5's BLEND is premultiplied (ONE, ONE_MINUS_SRC_ALPHA): the colour must be multiplied by
-  // alpha, or every translucent layer adds its full brightness and the heart washes to white
+  // ---- surface variation: soft mottling and fine lengthwise striations (procedural noise) ----
+  float n1 = vnoise(vec3(u * 5.0, v * 3.0, uSeed * 31.0));
+  float n2 = vnoise(vec3(u * 14.0, v * 9.0, uSeed * 13.0 + 4.0));
+  float stri = 0.5 + 0.5 * sin(v * 46.0 + n1 * 5.0);
+  // ---- albedo: warm near the pivot → body colour → cool tip, with thin-film iridescence ----
+  vec3 col = mix(uBaseCol, uBodyCol, smoothstep(0.0, 0.42, u));
+  col = mix(col, uTipCol, smoothstep(0.5, 1.0, u) * 0.8);
+  float film = fr * 0.9 + u * 0.35 + av * 0.25 + n1 * 0.25 + uSeed + uTime * 0.03;
+  vec3 ir = 0.5 + 0.5 * cos(6.2832 * (film + vec3(0.0, 0.33, 0.67)));
+  col *= 1.0 + (ir - 0.5) * 0.8 * uIri;
+  col = mix(col, uTipCol, fr * 0.4 * uIri);
+  col *= 0.9 + 0.14 * n1 + 0.05 * (stri - 0.5);
+  // ---- lighting ----
+  // soft hemisphere ambient (lavender sky above, deep violet below) so it never goes flat-dark
+  vec3 amb = mix(vec3(0.30, 0.20, 0.42), vec3(0.62, 0.55, 0.85), N.y * 0.5 + 0.5);
+  // a cool key light from above-front, with wrap diffuse (thin, light-scattering tissue)
+  vec3 Lk = normalize(vec3(0.35, 0.85, 0.4)), keyCol = vec3(0.95, 0.9, 1.0);
+  float wrapK = clamp((dot(N, Lk) + 0.55) / 1.55, 0.0, 1.0);
+  float wrapC = clamp((dot(N, Lc) + 0.6) / 1.6, 0.0, 1.0);
+  vec3 coreLightCol = vec3(1.0, 0.55, 0.2) * uCore * coreAtt;
+  vec3 diffuse = amb * 0.55 + keyCol * wrapK * 0.5 + coreLightCol * wrapC * 1.05;
+  // translucency: light from BEHIND the petal glows through it (thinner in the middle)
+  float thin = 1.0 - 0.6 * smoothstep(0.55, 1.0, av);
+  float tK = pow(clamp(dot(V, -normalize(Lk + N * 0.4)), 0.0, 1.0), 3.0);
+  float tC = pow(clamp(dot(V, -normalize(Lc + N * 0.4)), 0.0, 1.0), 2.0);
+  vec3 trans = (keyCol * tK * 0.45 + coreLightCol * tC * 1.6) * thin;
+  // a soft, wide dewy highlight (not a hard plastic spot) and a fresnel sheen in the iridescent hue
+  vec3 H = normalize(Lk + V);
+  float spec = pow(clamp(dot(N, H), 0.0, 1.0), 36.0) * 0.28 + pow(clamp(dot(N, normalize(Lc + V)), 0.0, 1.0), 24.0) * 0.4 * uCore * coreAtt;
+  vec3 sheen = mix(uRimCol, mix(uTipCol, ir, 0.4), 0.5) * fr * (0.35 + 0.35 * uIri);
+  // ---- glowing veins: a mid vein and fine veins that converge toward the base, light flowing up them ----
+  float q = v * 4.5 + 0.12 * (n2 - 0.5) + 0.05 * sin(u * 8.0 + uSeed * 6.0);
+  float fine = (1.0 - smoothstep(0.0, 0.045, abs(fract(q) - 0.5))) * smoothstep(0.04, 0.2, u) * smoothstep(1.0, 0.6, u) * smoothstep(0.95, 0.6, av);
+  float mid = exp(-av * 34.0) * smoothstep(0.98, 0.25, u) * smoothstep(0.0, 0.1, u);
+  float flow = 0.6 + 0.4 * sin(u * 12.0 - uTime * 2.0 + uSeed * 20.0);
+  float vein = (mid + fine * 0.85) * flow;
+  // ---- rims: the edge and tip glow softly (not right at the base, where ten petals overlap) ----
+  float rim = (smoothstep(0.8, 1.0, av) * 0.8 + smoothstep(0.9, 1.0, u) * 0.5) * smoothstep(0.08, 0.35, u);
+  vec3 veinCol = mix(uRimCol, vec3(1.0, 0.68, 0.38), smoothstep(0.5, 0.0, u) * 0.6);
+  vec3 emit = (uRimCol * rim * 0.45 + veinCol * vein * uVein * 1.25 + uBodyCol * 0.12) * uEmit
+            + vec3(1.0, 0.5, 0.15) * exp(-u * 5.5) * uCore * 0.35;
+  vec3 c = col * (diffuse + trans) + emit + sheen + vec3(1.0, 0.92, 0.98) * spec;
+  // ---- translucency (alpha): thin in the middle, denser at the edges and at grazing angles ----
+  float a = clamp(uAlpha * (0.5 + 0.32 * fr + 0.22 * rim + 0.12 * vein + 0.1 * (n1 - 0.5)), 0.0, 0.94);
+  // p5's BLEND is premultiplied (ONE, ONE_MINUS_SRC_ALPHA): the colour must be multiplied by alpha,
+  // or every translucent layer adds its full brightness and the heart washes out to white
   outColor = vec4(c * a, a);
 }
 `

@@ -128,6 +128,16 @@ AG.GardenScene = {
     function wheel(d) { cam.dist = p.constrain(cam.dist * Math.exp(d * 0.001), 6, 30); }
     function resetView() { cam.yaw = 0.55; cam.pitch = 0.3; cam.dist = 12.5; mode = null; }
 
+    /* the flower's own origin in p5's transform stack (shared by the receptacle and the petals):
+       reset → its base → p.scale (growth / click swell / breathing / 100 % pulse, js/garden/flower.js
+       F.grow, centred on the base) → p.rotate (a slow organic turn about its axis, F.idleYaw) */
+    function flowerOrigin() {
+      p.resetMatrix();
+      p.translate(flower.center[0], flower.center[1], flower.center[2]);
+      p.scale(flower.scale * flower.grow);
+      p.rotate(flower.idleYaw, [0, 1, 0]);
+    }
+
     /* ---------- frame ---------- */
     function draw(dt) {
       init();
@@ -152,7 +162,10 @@ AG.GardenScene = {
       p.blendMode(p.BLEND); gl.depthMask(true);
       p.shader(SH.petal); common(SH.petal);
       SH.petal.setUniform('uKind', 1); SH.petal.setUniform('uCore', flower.core); SH.petal.setUniform('uCoreCol', col.core);
+      p.push();
+      flowerOrigin();
       p.model(domeGeo);
+      p.pop();
       // stamen filaments
       p.blendMode(p.ADD); gl.depthMask(false);
       p.shader(SH.spr); common(SH.spr);
@@ -166,14 +179,28 @@ AG.GardenScene = {
       SH.petal.setUniform('uRimCol', col.rim); SH.petal.setUniform('uCoreCol', col.core);
       SH.petal.setUniform('uBloom', flower.bloom); SH.petal.setUniform('uAwake', flower.awakeK); SH.petal.setUniform('uCore', flower.core);
       SH.petal.setUniform('uVein', flower.vein); SH.petal.setUniform('uAlpha', 0.58 + 0.14 * flower.bloom);
+      SH.petal.setUniform('uIri', flower.iri); SH.petal.setUniform('uEmit', flower.emit);
       const order = flower.petals.slice().sort((a, b) => b.dist2 - a.dist2);
+      p.push();
+      flowerOrigin();
       for (const P of order) {
-        SH.petal.setUniform('uA', [P.phi, P.r0, P.L, P.W]);
-        SH.petal.setUniform('uB', [P.pose.th, P.pose.k, P.pose.cup, P.y0]);
-        SH.petal.setUniform('uC', [P.pose.flutter, P.pose.twist, 0, 0]);
+        // each petal: p5's model matrix = flower origin · azimuth · its base · its rotation · its growth.
+        // The petal shader multiplies its local geometry by this matrix (uModelMatrix).
+        p.push();
+        p.rotate(-P.phi, [0, 1, 0]);          // turn to the petal's place around the flower
+        p.translate(P.r0, P.y0, 0);           // move to its base: the pivot it rotates about
+        p.rotate(-P.hinge, [0, 0, 1]);        // OPENING: rotates away from the centre about its base, driven by the drag
+        p.rotate(-P.sway, [0, 0, 1]);         // idle organic sway about the same base (p.sin breathing + p.noise)
+        p.scale(P.grow);                      // the petal grows a little as it unfolds (0.9 → 1.0), from its base
+        SH.petal.setUniform('uA', [0, P.r0, P.L, P.W]);
+        SH.petal.setUniform('uB', [P.pose.th, P.pose.k0, P.pose.cup, P.y0]);
+        SH.petal.setUniform('uC', [P.pose.flutter, P.pose.twist, P.pose.k1, P.asym]);
+        SH.petal.setUniform('uD', [P.pose.curl, 0.12, P.seed, P.pose.wrap]);
         SH.petal.setUniform('uSeed', P.seed);
         p.model(petalGeo);
+        p.pop();
       }
+      p.pop();
       // glow sprites: core glow, anthers, motes
       p.blendMode(p.ADD);
       p.shader(SH.spr); common(SH.spr);
