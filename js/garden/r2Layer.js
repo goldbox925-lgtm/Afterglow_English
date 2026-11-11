@@ -62,6 +62,76 @@ AG.R2Layer = {
       p.ellipse(0, -1, 0.22, 0.22, 10);                            // a bright tip
     }
 
+    /* ---- Phase 4: the building's transformation, seen from inside (AG.R2 streams, AG.Living paths) ---- */
+    function leafShape() {
+      p.beginShape();
+      p.vertex(0, 0);
+      p.bezierVertex(0.45, -0.25, 0.5, -0.8, 0, -1.2);
+      p.bezierVertex(-0.5, -0.8, -0.45, -0.25, 0, 0);
+      p.endShape(p.CLOSE);
+    }
+    function transformation(scene, h) {
+      const R = AG.R2, LV = AG.Living && AG.Living.built;
+      if (!LV || R.transform <= 0) return;
+      const S = R.stage, t = R.sinceBloom;
+      // GOLDEN PULSE as the flower reaches 100 %: two soft rings, the second a little later
+      for (const delay of [0, 0.6]) {
+        const k = (t - delay) / 2.6;
+        if (k <= 0 || k >= 1) continue;
+        p.push();
+        p.translate(h.x, h.y);
+        p.scale(h.r * p.lerp(1, 9, 1 - Math.pow(1 - k, 3)), h.r * p.lerp(1, 9, 1 - Math.pow(1 - k, 3)) * 0.45);   // a ring on the floor
+        p.noFill(); p.stroke(alpha(COL.gold, 0.8 * Math.pow(1 - k, 1.4))); p.strokeWeight(2);
+        p.ellipse(0, 0, 2, 2, 48);
+        p.pop();
+      }
+      // (STAGE A's golden light paths on the floor are a WebGL ribbon mesh: js/garden/living.js)
+      // STAGE C: luminous leaves unfurling along the vines on the atrium walls, as the growth passes
+      if (S.C > 0.001) {
+        const front = S.C * 1.02;
+        for (let i = 0; i < LV.atrium.leaves.length; i++) {
+          const n = LV.atrium.leaves[i];
+          if (n.s > front) continue;
+          const g = p.constrain(p.map(front - n.s, 0, 0.06, 0, 1), 0, 1);           // it grows as the front passes
+          const a = scene.project(n.pos), b = scene.project(U.v3.add(n.pos, n.dir));
+          const ang = Math.atan2(b[1] - a[1], b[0] - a[0]) + p.HALF_PI + n.side * 0.8;
+          const px = p.dist(a[0], a[1], b[0], b[1]) * 1.4 * n.size;                 // metres → pixels where it is
+          if (px < 1.5 || a[0] < -40 || a[0] > p.width + 40 || a[1] < -40 || a[1] > p.height + 40) continue;
+          p.push();
+          p.translate(a[0], a[1]);
+          p.rotate(ang + 0.15 * p.sin(t * 1.4 + i));                                   // a slight living sway
+          p.scale(px * g * (1 + 0.06 * S.E * p.sin(t * 2 + i)));
+          const col = p.lerpColor(n.side > 0 ? COL.pink : COL.cyan, COL.lav, 0.35);
+          // outline only: a FILLED bezier shape is tessellated on the CPU every frame in p5's WEBGL mode
+          p.noFill(); p.stroke(alpha(col, 0.75 * g)); p.strokeWeight(1.1);
+          leafShape();
+          p.pop();
+        }
+      }
+      // STAGE D: a rosette of light behind the flower, answering the rooftop bloom: it opens (scale),
+      // turns slowly (rotate) and pulses (p.sin) with the same stage
+      if (S.D > 0.001) {
+        p.push();
+        p.translate(h.x, h.y - h.r * 0.4);
+        p.rotate(t * 0.12);
+        p.scale(h.r * (2.2 + 1.4 * S.D) * (1 + 0.05 * p.sin(t * 1.6)));
+        for (let i = 0; i < 12; i++) {
+          p.push();
+          p.rotate((i / 12) * p.TWO_PI);
+          p.scale(0.5 + 0.5 * S.D, 1);
+          const col = p.lerpColor(COL.pink, COL.gold, (i % 3) / 3);
+          p.noFill(); p.stroke(alpha(col, 0.18 * S.D)); p.strokeWeight(1.2);
+          p.beginShape();
+          p.vertex(0, -0.35);
+          p.bezierVertex(0.22, -0.6, 0.16, -0.95, 0, -1.1);
+          p.bezierVertex(-0.16, -0.95, -0.22, -0.6, 0, -0.35);
+          p.endShape(p.CLOSE);
+          p.pop();
+        }
+        p.pop();
+      }
+    }
+
     function draw(scene) {
       const f = scene.flower, gl = p.drawingContext, t = f.t, b = f.bloom;
       const h = scene.heartScreen();                               // (also sets the scene's matrices)
@@ -70,6 +140,8 @@ AG.R2Layer = {
       gl.disable(gl.DEPTH_TEST);
       p.blendMode(p.ADD);
       p.translate(-p.width / 2, -p.height / 2);                    // screen pixels, origin top-left
+      p.bezierDetail(6);
+      transformation(scene, h);
 
       // ---- HOVER CUE ----
       const hk = f.hoverK;

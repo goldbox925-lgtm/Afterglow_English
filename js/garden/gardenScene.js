@@ -139,17 +139,17 @@ AG.GardenScene = {
       lastX = x; lastY = y;
     }
     function up() { if (mode === 'flower') flower.pointerUp(); mode = null; }
-    function wheel(d) { cam.dist = p.constrain(cam.dist * Math.exp(d * 0.001), 6, 30); }
+    function wheel(d) { cam.dist = p.constrain(cam.dist * Math.exp(d * 0.001), 6, 22); }   // (≤ 22 m: inside the atrium's walls)
     function resetView() { cam.yaw = 0.55; cam.pitch = 0.3; cam.dist = 12.5; mode = null; }
 
     /* the flower's own origin in p5's transform stack (shared by the receptacle and the petals):
        reset → its base → p.scale (growth / click swell / breathing / 100 % pulse, js/garden/flower.js
        F.grow, centred on the base) → p.rotate (a slow organic turn about its axis, F.idleYaw) */
-    function flowerOrigin() {
+    function flowerOrigin(fl) {
       p.resetMatrix();
-      p.translate(flower.center[0], flower.center[1], flower.center[2]);
-      p.scale(flower.scale * flower.grow);
-      p.rotate(flower.idleYaw, [0, 1, 0]);
+      p.translate(fl.center[0], fl.center[1], fl.center[2]);
+      p.scale(fl.scale * fl.grow);
+      p.rotate(fl.idleYaw, [0, 1, 0]);
     }
 
     /* ---------- frame ---------- */
@@ -166,54 +166,40 @@ AG.GardenScene = {
       AG.Renderer.drawCharacterWith(camInfo(), o.CH, flower.t, { warm: flower.prox });
     }
 
-    function draw(dt, o) {
+    /* the flower itself (receptacle, stamens, sorted petals, glow sprites) into the framebuffer that is
+       bound now, seen through vw = { V, P, eye }. Used by this scene and, for the rooftop flower of
+       the building's transformation, by the city renderer (js/garden/living.js): the same shaders,
+       and the same p.rotate / p.scale petal transforms. */
+    function drawFlowerBody(fl, vw, hooks) {
       init();
-      camera();
-      flower.update(dt, view.eye);
-      const t = flower.t, col = flower.colors;
-      // is she behind the flower's centre (seen from the camera)?
-      const herPos = o && o.CH && o.CH.main && o.CH.main.anchorPos;
-      const herBehind = !!herPos && U.v3.len(U.v3.sub(herPos, view.eye)) > U.v3.len(U.v3.sub(flower.center, view.eye));
-
-      sceneFB.begin();
-      p.clear();
-      // backdrop
-      gl.disable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.BLEND);
-      p.shader(SH.back); SH.back.setUniform('uBloom', flower.bloom); SH.back.setUniform('uTime', t); p.model(quad);
-      gl.enable(gl.DEPTH_TEST);
-      const common = (sh) => { sh.setUniform('uView', view.V); sh.setUniform('uProj', view.P); sh.setUniform('uCamPos', view.eye); sh.setUniform('uTime', t); sh.setUniform('uCenter', flower.center); sh.setUniform('uScale', flower.scale); };
-      // ground light rings + click pulse
-      p.blendMode(p.ADD); gl.depthMask(false);
-      p.shader(SH.spr); common(SH.spr);
-      SH.spr.setUniform('uKind', 2); SH.spr.setUniform('uDisc', 2.6); SH.spr.setUniform('uBloom', flower.bloom); SH.spr.setUniform('uAwake', flower.awakeK);
-      SH.spr.setUniform('uPulseR', flower.pulseR); SH.spr.setUniform('uPulseA', flower.pulseA); SH.spr.setUniform('uRingCol', col.ring);
-      p.model(discGeo);
+      const t = fl.t, col = fl.colors;
+      const common = (sh) => { sh.setUniform('uView', vw.V); sh.setUniform('uProj', vw.P); sh.setUniform('uCamPos', vw.eye); sh.setUniform('uTime', t); sh.setUniform('uCenter', fl.center); sh.setUniform('uScale', fl.scale); };
       // receptacle (opaque, writes depth)
       p.blendMode(p.BLEND); gl.depthMask(true);
       p.shader(SH.petal); common(SH.petal);
-      SH.petal.setUniform('uKind', 1); SH.petal.setUniform('uCore', flower.core); SH.petal.setUniform('uCoreCol', col.core);
+      SH.petal.setUniform('uKind', 1); SH.petal.setUniform('uCore', fl.core); SH.petal.setUniform('uCoreCol', col.core);
       p.push();
-      flowerOrigin();
+      flowerOrigin(fl);
       p.model(domeGeo);
       p.pop();
       // stamen filaments
       p.blendMode(p.ADD); gl.depthMask(false);
       p.shader(SH.spr); common(SH.spr);
-      SH.spr.setUniform('uKind', 1); SH.spr.setUniform('uStamA', flower.stamA); SH.spr.setUniform('uStamB', flower.stamB);
+      SH.spr.setUniform('uKind', 1); SH.spr.setUniform('uStamA', fl.stamA); SH.spr.setUniform('uStamB', fl.stamB);
       p.model(stamGeo);
-      if (herBehind) { drawHer(o); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); }
+      if (hooks && hooks.beforePetals) hooks.beforePetals();
       // petals: translucent, sorted back to front, two-sided, no depth writes
       p.blendMode(p.BLEND);
       p.shader(SH.petal); common(SH.petal);
       SH.petal.setUniform('uKind', 0);
       SH.petal.setUniform('uBaseCol', col.base); SH.petal.setUniform('uBodyCol', col.body); SH.petal.setUniform('uTipCol', col.tip);
       SH.petal.setUniform('uRimCol', col.rim); SH.petal.setUniform('uCoreCol', col.core);
-      SH.petal.setUniform('uBloom', flower.bloom); SH.petal.setUniform('uAwake', flower.awakeK); SH.petal.setUniform('uCore', flower.core);
-      SH.petal.setUniform('uVein', flower.vein); SH.petal.setUniform('uAlpha', 0.58 + 0.14 * flower.bloom);
-      SH.petal.setUniform('uIri', flower.iri); SH.petal.setUniform('uEmit', flower.emit);
-      const order = flower.petals.slice().sort((a, b) => b.dist2 - a.dist2);
+      SH.petal.setUniform('uBloom', fl.bloom); SH.petal.setUniform('uAwake', fl.awakeK); SH.petal.setUniform('uCore', fl.core);
+      SH.petal.setUniform('uVein', fl.vein); SH.petal.setUniform('uAlpha', 0.58 + 0.14 * fl.bloom);
+      SH.petal.setUniform('uIri', fl.iri); SH.petal.setUniform('uEmit', fl.emit);
+      const order = fl.petals.slice().sort((a, b) => b.dist2 - a.dist2);
       p.push();
-      flowerOrigin();
+      flowerOrigin(fl);
       for (const P of order) {
         // each petal: p5's model matrix = flower origin · azimuth · its base · its rotation · its growth.
         // The petal shader multiplies its local geometry by this matrix (uModelMatrix).
@@ -233,12 +219,43 @@ AG.GardenScene = {
         p.pop();
       }
       p.pop();
-      if (herPos && !herBehind) { drawHer(o); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); }
+      if (hooks && hooks.afterPetals) hooks.afterPetals();
       // glow sprites: core glow, anthers, motes
       p.blendMode(p.ADD);
       p.shader(SH.spr); common(SH.spr);
-      SH.spr.setUniform('uKind', 0); SH.spr.setUniform('uSpr', flower.spr); SH.spr.setUniform('uSprC', flower.sprC);
+      SH.spr.setUniform('uKind', 0); SH.spr.setUniform('uSpr', fl.spr); SH.spr.setUniform('uSprC', fl.sprC);
       p.model(sprGeo);
+      gl.depthMask(true); p.blendMode(p.BLEND);
+    }
+
+    function draw(dt, o) {
+      init();
+      camera();
+      flower.update(dt, view.eye);
+      const t = flower.t, col = flower.colors;
+      // is she behind the flower's centre (seen from the camera)?
+      const herPos = o && o.CH && o.CH.main && o.CH.main.anchorPos;
+      const herBehind = !!herPos && U.v3.len(U.v3.sub(herPos, view.eye)) > U.v3.len(U.v3.sub(flower.center, view.eye));
+
+      sceneFB.begin();
+      p.clear();
+      // backdrop
+      gl.disable(gl.DEPTH_TEST); gl.depthMask(false); p.blendMode(p.BLEND);
+      p.shader(SH.back); SH.back.setUniform('uBloom', flower.bloom); SH.back.setUniform('uTime', t); p.model(quad);
+      // Round 02 · Phase 4: the atrium's living walls behind the flower, once the transformation runs
+      if (o && o.atrium) o.atrium({ V: view.V, P: view.P, eye: view.eye }, flower.center);
+      gl.enable(gl.DEPTH_TEST);
+      const common = (sh) => { sh.setUniform('uView', view.V); sh.setUniform('uProj', view.P); sh.setUniform('uCamPos', view.eye); sh.setUniform('uTime', t); sh.setUniform('uCenter', flower.center); sh.setUniform('uScale', flower.scale); };
+      // ground light rings + click pulse
+      p.blendMode(p.ADD); gl.depthMask(false);
+      p.shader(SH.spr); common(SH.spr);
+      SH.spr.setUniform('uKind', 2); SH.spr.setUniform('uDisc', 2.6); SH.spr.setUniform('uBloom', flower.bloom); SH.spr.setUniform('uAwake', flower.awakeK);
+      SH.spr.setUniform('uPulseR', flower.pulseR); SH.spr.setUniform('uPulseA', flower.pulseA); SH.spr.setUniform('uRingCol', col.ring);
+      p.model(discGeo);
+      drawFlowerBody(flower, { V: view.V, P: view.P, eye: view.eye }, {
+        beforePetals: () => { if (herBehind) { drawHer(o); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); } },
+        afterPetals: () => { if (herPos && !herBehind) { drawHer(o); gl.enable(gl.DEPTH_TEST); gl.depthMask(false); } }
+      });
       gl.depthMask(true); p.blendMode(p.BLEND);
       sceneFB.end();
 
@@ -256,7 +273,7 @@ AG.GardenScene = {
       gl.enable(gl.DEPTH_TEST);
     }
 
-    return { flower, cam, view, init, resize, draw, down, move, up, wheel, hover, heartScreen, resetView, camera, project,
+    return { flower, cam, view, init, resize, draw, drawFlowerBody, down, move, up, wheel, hover, heartScreen, resetView, camera, project,
       get dragging() { return mode === 'flower'; } };
   }
 };

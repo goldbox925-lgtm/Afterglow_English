@@ -1,8 +1,8 @@
 # Round 02 · Memory Garden — p5.js-first technical plan
 
-Status: **phases 1–3 are implemented**: the state backbone, direct R02 navigation, one input path,
-hover, the p5-drawn light layer, and the heroine in the garden. Phase 4 (the building's
-transformation) is a proposal with test criteria.
+Status: **phases 1–4 are implemented**: the state backbone, direct R02 navigation, one input path,
+hover, the p5-drawn light layer, the heroine in the garden, and the building's transformation. The
+exit / final exploration sequence is not built yet.
 
 ## 0. Audit: what exists today
 
@@ -115,6 +115,72 @@ polling.
 
 ## 7. Phases and test criteria
 
+**Phase 4 notes (as built): the building's transformation.**
+
+*Data streams.* All are in `AG.R2` (`js/garden/round2.js`), the single authority; everything
+else only reads them.
+
+| Stream | Source | Used by |
+|---|---|---|
+| `bloom`, `bloomed` | the flower | the trigger: nothing starts before 100 % (measured: 0 at 98 %) |
+| `glow` (flower.core), `particles` (live motes) | the flower | the transformation's speed: `p.constrain(p.map(glow, 0.8, 2.4, 0.9, 1.2) · p.map(particles, 0, 40, 0.92, 1.12), 0.8, 1.35)` |
+| `sinceBloom` | game time after 100 % (paused with the game, from `p.deltaTime`) | the golden pulse, the shaders' animation, breathing |
+| `transform` 0..1 | `+= dt / 42 s · drive` | everything below |
+| `stage.A … E` | windows on `transform` (`p.map` → `p.constrain`, overlapping): A 0–0.18, B 0.12–0.42, C 0.3–0.72, D 0.6–0.9, E 0.85–1 | shaders, p5 layer, rooftop flower |
+| `windows` | `p.map(transform, 0.2, 0.78)` | which windows are lit |
+| `flowerPos`, `buildingPos` | the scene, the doorway's building | light origin, rooftop placement |
+
+*The stages:*
+- **A, awakening.** A golden pulse (two rings, p5 layer, `p.scale`). Golden light spreads from
+  the flower across the atrium floor and walls (a light front in the wall shader), and golden
+  light paths grow across the floor.
+- **B, energy flow.** Light rises up the building's columns and floor slabs, with pulses running
+  up and along them, and the windows begin to light one by one (each has its own threshold).
+- **C, organic growth.** Pink, cyan and lavender vines climb the walls, tip-first. Luminous leaves
+  unfurl along them as the growth front passes (p5 layer: `push` / `translate` / `rotate` /
+  `scale` / `pop`, bezier leaf outlines).
+- **D, rooftop bloom.** A giant `AG.BloomFlower` opens above the roof, drawn by the existing
+  flower renderer (`GardenScene.drawFlowerBody`: the same shaders and `p.rotate` / `p.scale`
+  petal transforms). Inside, a rosette of light behind the flower opens, turns and pulses with
+  the same stage, and the walls glow from the top.
+- **E, living architecture.** Everything breathes (`p.sin`), the vines' light flows, and the
+  colours drift with `p.lerpColor`.
+
+*Procedural growth (`js/garden/vines.js`).* Walkers grow on the building's real planes:
+- each has a position and direction (`p.createVector`);
+- every step turns it by `p.map(p.noise(u, v, seed), 0, 1, −turn, turn)` and pulls it gently
+  upward (`dir.lerp(up, k).setMag(step)`);
+- side shoots branch when `p.random() < branchP`;
+- a walker stops at the surface's edge;
+- `p.randomSeed(seed from the building)` makes the vines deterministic per city (verified: a
+  rebuild gives identical geometry).
+
+The paths become ribbon meshes (`AG.GeometryBuilder`) whose growth order the shader reveals.
+- **Inside**, the atrium walls are the doorway building's own footprint, enlarged to keep the
+  walls at least 24 m from the flower.
+- **Outside**, the four faces are the building's real lowest shaft, from the city's geometry,
+  with extra roots at both sides of the doorway.
+
+*Rendering split:*
+- **WebGL / GLSL** (`js/shaders/living.glsl.js`, `AG.Living`): the walls, structure, windows,
+  the vines inside and outside, the floor light paths, and the rooftop flower.
+- **p5 drawing:** the golden pulse, the leaves and the rosette, plus the Phase 2 elements.
+
+*Performance.*
+- The meshes are built once (seeded) and grow by uniforms; nothing is allocated per frame for
+  them.
+- Measured CPU per garden frame: 0.9 ms before, 3.7–5.3 ms during the transformation.
+- p5's immediate mode turned out expensive in WEBGL: every `beginShape` / `endShape` rebuilds its
+  stroke geometry on the CPU (the floor paths drawn as p5 beziers cost ~11 ms), and filled bezier
+  shapes are tessellated every frame (800 leaves hung the page). So those became a WebGL mesh,
+  and the p5 layer keeps 40 outline leaves.
+
+*Other notes:*
+- **Exterior windows:** they are a soft overlay at about a third of the inside intensity, because
+  they sit over the city's own windows and don't align with them.
+- **Heroine and camera:** the transformation never moves her or the camera. Measured over 2.5 s:
+  camera unchanged; she drifted 0.29 m, which is the tail of her own arrival easing.
+
 **Phase 3 notes (as built).** Phase 3 has no new movement system: it reuses her existing
 flight controller, poses and character drawing.
 - **Flight.** `AG.Flight` (`js/core/flight.js`) has a **garden mode** (`enterGarden` /
@@ -169,7 +235,7 @@ flight controller, poses and character drawing.
 | **1 (done)** | `AG.R2` state and phase machine; the "R02" chip and key **6** jump straight to the start of Round 02; the HUD shows the Round 02 phase | The R02 chip and key 6 start Round 02 (the doorway flight) from any stage, with no lift-off cinematic and no end card. Phases run ENTER → APPROACH → AWAKEN → DRAG → BLOOM → TRANSFORM → EXIT → EXPLORE as the existing flow is played. The story path (end card → Enter the Memory Garden) still works. All five Round 01 stages work. No console errors. |
 | **2 (done)** | One input path (p5 callbacks); hover on the heart (`mouseMoved` + `dist`) brightens the core; the p5 light layer (cue ring, awaken pulse, orbiting symbols, pollen halos) | Hover changes the core brightness (measured). Each layer element is visible in screenshots, and absent when its `p.*` call is disabled (ablation). Click / drag / release unchanged. The preview still works. |
 | **3 (done)** | The heroine in the garden; APPROACH by pointing (`mouseMoved` / `mousePressed` → arrive steering, `p5.Vector`); proximity → glow, petal response, motes drifting toward her | Her distance to the flower changes the glow (measured). She stops smoothly (no overshoot) at 10, 30 and 60 fps. Drag still works. |
-| 4 | TRANSFORM: at 100 %, `AG.Vines` (noise-guided `p5.Vector` walkers, seeded `p.random`, beziers, `lerpColor`, `millis`) grows light vines in the garden (p5 layer) and across the doorway building's facade (renderer pass); EXIT → EXPLORE shows the transformed building in the city | The growth starts only after 100 %, is deterministic per city, keeps 60 fps on the balanced tier, and persists when she flies around the building. Round 01 is unchanged. |
+| **4 (done)** | TRANSFORM: at 100 %, `AG.Vines` (noise-guided `p5.Vector` walkers, seeded `p.random`, beziers, `lerpColor`, `millis`) grows light vines in the garden (p5 layer) and across the doorway building's facade (renderer pass); EXIT → EXPLORE shows the transformed building in the city | The growth starts only after 100 %, is deterministic per city, keeps 60 fps on the balanced tier, and persists when she flies around the building. Round 01 is unchanged. |
 
 Each phase ends with screenshots, an interaction test, a Round 01 check and an honest report of
 what was not verified.

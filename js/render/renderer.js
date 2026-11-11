@@ -583,6 +583,7 @@ AG.Renderer = (function () {
     drawSmoke(F, S);
     drawNetwork(F, S);
     drawPortal(F);
+    if (AG.Living) AG.Living.drawCity(F);     // Round 02: the doorway building's transformation (facade, rooftop flower)
     additive();
     if (!cam.split) {
       drawNeon(F, S, world.heroNeon);

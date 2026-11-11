@@ -24,6 +24,14 @@ callbacks in `js/sketch.js`.
   motes drift to her.
 - A click on the heart before she has arrived waits for her.
 
+**At 100 % the building awakens** (Phase 4, `js/garden/living.js`). The stages follow each
+other over about 40 s; the meter shows the stage and its progress.
+- **Inside** (the atrium round the flower): golden light, then energy along the structure,
+  windows, vines with unfurling leaves, a rosette of light, and finally breathing.
+- **Outside** (Back to the city): the facade lights up, vines climb it, and a giant flower opens
+  above the roof.
+- The transformation stays; Play again / R / R02 reset it.
+
 **Phase:** `AG.R2` (`js/garden/round2.js`) is Round 02's shared state. It derives the phase
 ENTER → APPROACH → AWAKEN → DRAG → BLOOM → TRANSFORM → EXIT → EXPLORE, shown in the HUD as
 "R02 · PHASE". The plan for the next phases is `docs/ROUND02_PLAN.md`.

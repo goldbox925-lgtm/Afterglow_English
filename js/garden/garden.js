@@ -69,7 +69,7 @@ AG.Garden = (function () {
             const from = V.add(c, V.scale(n, boxHalf - half + FC.radius + 2)), to = V.add(c, V.scale(n, START + 25));
             if (AG.Flight.segmentClear(from, to, DOOR_W / 2, b) < 0.999) continue;
             const score = -Math.hypot(c[0] - D.x, c[2] - D.z) + y * 0.5;
-            if (!best || score > best.score) best = { box: b, c, n, w: DOOR_W, h: DOOR_H, inset: boxHalf - half, roof: b.top, score };
+            if (!best || score > best.score) best = { box: b, shaft: s, c, n, w: DOOR_W, h: DOOR_H, inset: boxHalf - half, roof: b.top, score };
           }
         }
       }
@@ -208,14 +208,19 @@ AG.Garden = (function () {
   /* the garden scene replaces the city image while inside (or fading out of it) */
   function drawsScene() { return G.phase === 'inside' || G.phase === 'leave'; }
   function draw(dt, CH) {
-    G.scene.draw(dt, { CH });                 // the garden, with her in it (the city renderer's character drawing)
+    // the garden, with her in it (the city renderer's character drawing) and, once the building
+    // transforms, the atrium's living walls behind the flower (js/garden/living.js)
+    G.scene.draw(dt, { CH, atrium: AG.Living ? AG.Living.drawGarden : null });
     if (!G.layer) G.layer = AG.R2Layer.create(p);
     G.layer.draw(G.scene);                    // the p5-drawn light layer, on top (js/garden/r2Layer.js)
-    const f = G.scene.flower;
-    const pct = Math.round(f.bloom * 100);
-    if ($('gardenPct').textContent !== pct + '%') $('gardenPct').textContent = pct + '%';
-    $('gardenBar').style.width = (f.bloom * 100).toFixed(1) + '%';
-    const st = f.stageName() + (f.dragging ? ' · unfolding' : '');
+    const f = G.scene.flower, R = AG.R2;
+    // the meter: the bloom, then (after 100 %) the building's transformation and its stage
+    const T = R.transform > 0, v = T ? R.transform : f.bloom;
+    const pct = Math.round(v * 100) + '%';
+    if ($('gardenPct').textContent !== pct) $('gardenPct').textContent = pct;
+    $('gardenBar').style.width = (v * 100).toFixed(1) + '%';
+    const S = R.stage, stg = !T ? '' : S.E > 0.01 ? 'E · Living architecture' : S.D > 0.01 ? 'D · Rooftop bloom' : S.C > 0.01 ? 'C · Organic growth' : S.B > 0.01 ? 'B · Energy flow' : 'A · Awakening';
+    const st = T ? 'The building awakens · ' + stg : f.stageName() + (f.dragging ? ' · unfolding' : '');
     if ($('gardenStage').textContent !== st) $('gardenStage').textContent = st;
   }
 

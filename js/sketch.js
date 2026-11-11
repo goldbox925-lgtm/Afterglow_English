@@ -79,6 +79,7 @@
       AG.ScreenWords.init(p);
       AG.Story.bindEvents();
       AG.Garden.init(p);
+      AG.R2.init(p); AG.Living.init(p);       // Round 02's data streams and the building's transformation
       AG.UI.setLoading('Generating the city…', false);
       AG.CharacterAssets.load(p, 'A');
       setTimeout(() => {
@@ -161,7 +162,8 @@
         white = U.smooth(1.05, 0.55, q) * 0.3 * S.cloudGlow;      // a thin veil: she stays visible inside the cloud
       }
       AG.Renderer.white = U.damp(AG.Renderer.white || 0, white, 4, dt);
-      AG.R2.update(dt);                       // Round 02's shared state and phase (js/garden/round2.js)
+      AG.R2.update(dt);                       // Round 02's shared state, phase and data streams (js/garden/round2.js)
+      AG.Living.update(dt);                   // the building's transformation reads them (js/garden/living.js)
       // Round 02: inside the doorway the Memory Garden replaces the city image
       if (AG.Garden.drawsScene()) AG.Garden.draw(playing ? dt : 0, CH);
       else AG.Renderer.render(S, cam, F.animTime, rt, CH, F.animTime);
